@@ -119,36 +119,49 @@ Item {
     }
 
     //  ── The glass itself ──────────────────────────────────────────
-    ShaderEffect {
-        id: fx
+    //  Instantiated ONLY once the .qsb exists: a ShaderEffect whose
+    //  fragmentShader is still empty falls back to Qt's default
+    //  material, which demands a `source` property and warns
+    //  "ShaderEffect: 'source' does not have a matching property" at
+    //  every startup (r21 log). The Loader keeps that state impossible.
+    Loader {
+        id: fxLoader
         anchors.fill: parent
-        visible: glass.ready
-        fragmentShader: glass.ready ? glass.fragOutUrl : ""
-        onStatusChanged: {
-            if (status === ShaderEffect.Error) {
-                glass.glassState = "failed"
-                console.warn("glass: shader error —", log)
-            }
-        }
+        active: glass.ready
 
-        property variant src: bsrc
-        property real pad: glass.padPx
-        property vector2d itemSize: Qt.vector2d(width, height)
-        property vector2d glassSize: Qt.vector2d(glass.glassW, glass.glassH)
-        property vector2d srcSize: Qt.vector2d(bsrc.sourceRect.width,
-                                               bsrc.sourceRect.height)
-        property vector2d srcOffset: Qt.vector2d(glass.margin, glass.margin)
-        property real radius: glass.radius
-        property real bezel: Math.min(glass.glassH * 0.36, 26)
-        property real thickness: 30 * glass.liquidAmt
-        property real dispersion: 0.06 * glass.liquidAmt
-        property real magnify: 0.08 * glass.liquidAmt
-        property real rim: glass.rimStrength
-        property real grain: glass.grainAmt
-        property real blurPx: 5
-        property real tintMix: glass.tint * 0.55
-        property real saturation: 1.25
-        property real dark: 1
-        property real debug: 0
+        sourceComponent: ShaderEffect {
+            id: fx
+            anchors.fill: parent
+            fragmentShader: glass.fragOutUrl
+            onStatusChanged: {
+                if (status === ShaderEffect.Error) {
+                    glass.glassState = "failed"
+                    console.warn("glass: shader error —", log)
+                }
+            }
+
+            //  Order matters: the non-sampler property declaration order
+            //  MUST equal the shader's `uniform buf` member order
+            //  (validated by scripts/check_hyprnotch.py v19).
+            property variant src: bsrc
+            property real pad: glass.padPx
+            property vector2d itemSize: Qt.vector2d(width, height)
+            property vector2d glassSize: Qt.vector2d(glass.glassW, glass.glassH)
+            property vector2d srcSize: Qt.vector2d(bsrc.sourceRect.width,
+                                                   bsrc.sourceRect.height)
+            property vector2d srcOffset: Qt.vector2d(glass.margin, glass.margin)
+            property real radius: glass.radius
+            property real bezel: Math.min(glass.glassH * 0.36, 26)
+            property real thickness: 30 * glass.liquidAmt
+            property real dispersion: 0.06 * glass.liquidAmt
+            property real magnify: 0.08 * glass.liquidAmt
+            property real rim: glass.rimStrength
+            property real grain: glass.grainAmt
+            property real blurPx: 5
+            property real tintMix: glass.tint * 0.55
+            property real saturation: 1.25
+            property real dark: 1
+            property real debug: 0
+        }
     }
 }

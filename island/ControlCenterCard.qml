@@ -491,11 +491,19 @@ Item {
                 anchors.margins: 12
                 spacing: 8
 
-                Row {
+                //  Head row is a plain Item, NOT a Row: the H/L column
+                //  must hug the right edge, and Row children may not use
+                //  anchors.left/right/horizontalCenter/fill/centerIn
+                //  ("Cannot specify anchors for items inside Row.
+                //  Row will not function." — 5x per relayout in r21).
+                Item {
+                    id: weatherHead
                     width: parent.width
-                    spacing: 12
+                    height: Math.max(30, tempNow.implicitHeight)
 
                     Glyph {
+                        id: weatherGlyph
+                        anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         size: 30
                         colorVal: Weather.current && Weather.current.isDay ? Theme.yellow : Theme.purple
@@ -503,6 +511,9 @@ Item {
                     }
 
                     Text {
+                        id: tempNow
+                        anchors.left: weatherGlyph.right
+                        anchors.leftMargin: 12
                         anchors.verticalCenter: parent.verticalCenter
                         text: Weather.current ? Weather.current.temp + "°" : "--°"
                         color: Theme.ink
@@ -512,6 +523,8 @@ Item {
                     }
 
                     Column {
+                        anchors.left: tempNow.right
+                        anchors.leftMargin: 12
                         anchors.verticalCenter: parent.verticalCenter
                         Text {
                             text: Weather.current ? Weather.describe(Weather.current.code) : ""
@@ -531,8 +544,8 @@ Item {
                     }
 
                     Column {
-                        anchors.verticalCenter: parent.verticalCenter
                         anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
                         Text {
                             anchors.right: parent.right
                             text: Weather.daily.length > 0
@@ -1404,7 +1417,10 @@ Item {
                 Repeater {
                     model: Tasks.items
 
-                    Row {
+                    //  Item, NOT a Row: the text hangs off the circle and
+                    //  the trash glyph hugs the right edge — both need
+                    //  horizontal anchors, which Row children may not use.
+                    Item {
                         required property var modelData
                         required property int index
                         width: parent.width
@@ -1412,6 +1428,7 @@ Item {
 
                         Rectangle {
                             id: checkCircle
+                            anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
                             width: 14; height: 14; radius: 7
                             color: parent.modelData.done ? Theme.accent : "transparent"
@@ -1432,10 +1449,11 @@ Item {
                         }
 
                         Text {
-                            anchors.verticalCenter: parent.verticalCenter
                             anchors.left: checkCircle.right
                             anchors.leftMargin: 8
-                            width: parent.width - 60
+                            anchors.right: delGlyph.left
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
                             text: parent.modelData.text
                             color: parent.modelData.done ? Theme.muted : Theme.ink
                             font.family: Theme.uiFont
@@ -1445,8 +1463,9 @@ Item {
                         }
 
                         Glyph {
-                            anchors.verticalCenter: parent.verticalCenter
+                            id: delGlyph
                             anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
                             size: 10
                             colorVal: delArea.containsMouse ? Theme.red : Theme.dim
                             glyph: Icons.trash

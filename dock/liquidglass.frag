@@ -14,7 +14,15 @@
 //   * Snell's law (refract) turns the normal into a lateral shift of the sampled backdrop
 //   * the backdrop is sampled per colour channel (dispersion) through a small disk blur
 //   * saturation / tint / milky lift, then specular rim, inner depth shading and a soft drop shadow
-//   * saturation / tint / milky lift, then specular rim, inner depth shading and a soft drop shadow
+//
+//  #version 440 is MANDATORY: qsb compiles the Vulkan-style GLSL and
+//  transpiles it to ES 310 / SPIR-V itself. Without the line qsb parses
+//  this as GLSL ES 1.00 and rejects it ("ES shaders for SPIR-V require
+//  version 310 or higher" + "'float': type requires declaration of
+//  default precision qualifier") — the dock silently lost its glass.
+//  The uniform buf member order MUST match the ShaderEffect property
+//  declaration order in GlassSurface.qml (minus the sampler `src`).
+#version 440
 
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
@@ -22,23 +30,23 @@ layout(location = 0) out vec4 fragColor;
 layout(std140, binding = 0) uniform buf {
     mat4 qt_Matrix;
     float qt_Opacity;
+    float pad;          // item padding around the glass (room for the drop shadow)
     vec2 itemSize;      // whole shader item in px (glass + pad on every side)
     vec2 glassSize;     // the Dock rectangle in px
     vec2 srcSize;       // backdrop texture size in px
     vec2 srcOffset;     // where the item's top-left sits inside the backdrop texture, px
-    float pad;          // item padding around the glass (room for the drop shadow)
     float radius;       // corner radius, px
     float bezel;        // width of the refracting rim, px
     float thickness;    // how far the rim shifts the backdrop, px
     float dispersion;   // chromatic split (0 = none)
+    float magnify;      // vertical lens magnification of the whole slab
+    float rim;          // specular edge highlight strength (1 = original strength)
+    float grain;        // fine noise amplitude over the whole glass
     float blurPx;       // backdrop blur radius, px
     float tintMix;      // 0..1 amount of flat tint (the "translucency" slider)
     float saturation;   // backdrop saturation boost
     float dark;         // 0 = light mode, 1 = dark mode
     float debug;        // 1 = show the raw backdrop texture (magenta = texture is empty)
-    float rim;          // specular edge highlight strength (1 = original strength)
-    float grain;        // fine noise amplitude over the whole glass
-    float magnify;      // vertical lens magnification of the whole slab
 };
 
 layout(binding = 1) uniform sampler2D src;

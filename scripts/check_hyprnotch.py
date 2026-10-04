@@ -88,6 +88,41 @@ v18 — hyprland-dock (nick-friedrich) port: the dock now uses surfaces
   gains grabFocus (popupwindow.hpp:87) and IconImage / DragHandler get
   whitelists.  (Catches: unimported IconImage — "unresolved type" or a
   load-time 'IconImage is not a type' cascade like r16.)
+
+v19 — runtime-warning round from the r21 start log (the config finally
+  loaded, but the console was noisy and two features silently
+  degraded):
+  a) positioner anchors: a DIRECT child of Row may not use anchors.
+     left/right/horizontalCenter/fill/centerIn and a direct child of
+     Column may not use anchors.top/bottom/verticalCenter/fill/
+     centerIn — Qt warns "Cannot specify ... for items inside Row.
+     Row will not function." and silently keeps the default layout
+     (the ControlCenterCard weather head warned 5x per relayout;
+     fixed by making it an Item, which has no anchor restrictions).
+  b) GLSL shaders (*.frag / *.vert) must declare `#version 440` as the
+     first non-comment line: qsb compiles Vulkan-style GLSL and
+     transpiles to ES 310 / SPIR-V itself. Without the line qsb parses
+     the source as GLSL ES 1.00 and rejects it ("ES shaders for
+     SPIR-V require version 310 or higher" + "'float': type requires
+     declaration of default precision qualifier") — liquidglass.frag
+     shipped exactly like that, so the Liquid Glass dock silently ran
+     on its frosted-glass fallback. Legacy ES-1.00 tokens (varying /
+     attribute / texture2D / gl_FragColor / gl_FragData) are banned
+     for the same reason.
+  c) a ShaderEffect wired to a .frag/.vert must declare its
+     non-sampler properties in EXACTLY the order of the shader's
+     std140 `uniform buf` members (after qt_Matrix / qt_Opacity):
+     both sides define one shared buffer layout, so order drift turns
+     the effect into garbage instead of an error. Samplers
+     (variant/var) are matched by name and excluded.
+  d) Hyprland.dispatch is only allowed in services/Hypr.qml — Lua
+     Hyprland (0.56+ hl.* API, incl. the user's k4 build) evaluates
+     dispatch requests as `return hl.dispatch(<raw text>)`, so every
+     call must go through the strategy-wrapped helpers
+     (Hypr.dispatch / Hypr.switchTo) that emit hl.dsp.* expressions
+     there and classic text on pre-Lua builds.
+  (Catches: weather Row anchors 5x-warning; liquidglass.frag missing
+  #version; GlassSurface property-order drift; stray raw dispatches.)
 """
 import os, re, sys
 
@@ -104,6 +139,10 @@ QT_BUILTIN_NAMES = {
 }
 
 ROOT = (sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+#  v19: force an absolute root — os.walk keys and os.path.normpath results
+#  (relative-import resolution) must agree, or component_file() KeyErrors
+#  when invoked as `python3 scripts/check_hyprnotch.py .` from the repo.
+ROOT = os.path.abspath(ROOT)
 
 REQUIRED_MODULE = {
     "Singleton": "Quickshell", "PanelWindow": "Quickshell",
@@ -442,7 +481,10 @@ def parse_file(path):
 
 def scan_objects(toks):
     """Yield QML objects: dict(type, line, assign, onx). Ternary-aware so
-    `a ? b : c` colons are not mistaken for property assignments."""
+    `a ? b : c` colons are not mistaken for property assignments.  v19:
+    also records each object's nearest enclosing QML type ("ptype") and
+    every anchors.<x> token used inside it ("anchors_use") for the
+    positioner-anchor check."""
     objects, stack, tern = [], [], 0
     for idx in range(len(toks)):
         k, v, ln = toks[idx]
@@ -455,11 +497,24 @@ def scan_objects(toks):
             if tern > 0:
                 tern -= 1
                 continue                       # ternary colon, not assignment
+        if (k == "id" and v == "anchors" and idx + 2 < len(toks)
+                and toks[idx+1][0] == "p" and toks[idx+1][1] == "."
+                and toks[idx+2][0] == "id"):
+            #  anchors.<x> usage — attribute it to the owning QML object
+            if stack and stack[-1][0] == "qml":
+                stack[-1][1].setdefault("anchors_use", []).append(
+                    (toks[idx+2][1], ln))
+            continue
         if k == "p" and v == "{":
             prv = toks[idx-1] if idx else None
             if prv and prv[0] == "id" and prv[1][:1].isupper():
                 obj = {"type": prv[1], "line": ln, "assign": [], "onx": [],
                        "isroot": not any(o.get("isroot") for o in objects)}
+                obj["ptype"] = ""               # nearest enclosing QML type
+                for fr in reversed(stack):
+                    if fr[0] == "qml":
+                        obj["ptype"] = fr[1]["type"]
+                        break
                 objects.append(obj)
                 stack.append(("qml", obj))
             else:
@@ -555,6 +610,13 @@ def main():
 
     for path in files:
         files[path] = parse_file(path)
+
+    #  v19: shader files are validated alongside the QML tree
+    shader_files = []
+    for base, dirs, fs in os.walk(ROOT):
+        for f in sorted(fs):
+            if f.endswith((".frag", ".vert")):
+                shader_files.append(os.path.join(base, f))
 
     def local_type(name, d):
         if name in dirmap[d]["types"] and os.path.exists(os.path.join(d, name + ".qml")):
@@ -992,12 +1054,131 @@ def main():
                                 f'resolved); use Keys.onPressed with '
                                 f'explicit event.key checks')
 
+        # ---- v19a: positioner anchors (Row/Column direct children) -------
+        #  (Catches: "QML Row at ControlCenterCard.qml[494:17]: Cannot
+        #  specify left, right, horizontalCenter, fill or centerIn anchors
+        #  for items inside Row. Row will not function." — 5x per
+        #  relayout; the anchors are silently DROPPED, so the layout
+        #  never looks broken in code review, only at runtime.)
+        ROW_BAN = {"left", "right", "horizontalCenter", "fill", "centerIn"}
+        COL_BAN = {"top", "bottom", "verticalCenter", "fill", "centerIn"}
+        for obj in scan_objects(info["toks"]):
+            ptype = obj.get("ptype", "")
+            ban = ROW_BAN if ptype == "Row" else \
+                  COL_BAN if ptype == "Column" else None
+            if not ban:
+                continue
+            for ax, ln3 in obj.get("anchors_use", []):
+                if ax in ban:
+                    errs.append(
+                        f'{path}:{ln3} [{obj["type"]}] anchors.{ax} on a '
+                        f'direct child of {ptype} — "{ptype} will not '
+                        f'function"; use an Item wrapper, spacer widths or '
+                        f'the positioner\'s own alignment instead')
+
+        # ---- v19b: ShaderEffect uniform buf order -------------------------
+        #  Both the QML property declaration order and the shader's
+        #  `uniform buf` member order describe ONE shared std140 buffer
+        #  layout — a mismatch renders garbage without any error.
+        #  Samplers (variant/var) are matched by name and excluded.
+        if re.search(r"\.(frag|vert)\b", raw):
+            fx_objs = [o for o in scan_objects(info["toks"])
+                       if o["type"] == "ShaderEffect"]
+            mfx = re.search(r"\bShaderEffect\s*\{", raw)
+            if len(fx_objs) == 1 and mfx:
+                start = mfx.end() - 1
+                depth = 0
+                end = start
+                for i in range(start, len(raw)):
+                    if raw[i] == "{":
+                        depth += 1
+                    elif raw[i] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            end = i
+                            break
+                block = raw[start:end + 1]
+                decls = re.findall(
+                    r"\bproperty\s+(variant|var|alias|real|int|double|bool|"
+                    r"vector2d|point|size|vec2|color|matrix4x4|quaternion)\s+"
+                    r"(\w+)\s*:", block)
+                buf_names = [nm for ty, nm in decls
+                             if ty not in ("variant", "var", "alias")]
+                mfr = re.search(r"(\w+\.(?:frag|vert))\b", raw)
+                ftarget = None
+                if mfr:
+                    for sp2 in shader_files:
+                        if os.path.basename(sp2) == mfr.group(1):
+                            ftarget = sp2
+                            break
+                members = None
+                if ftarget:
+                    ftext = open(ftarget, encoding="utf-8",
+                                 errors="ignore").read()
+                    mb = re.search(r"uniform\s+buf\s*\{([^}]*)\}", ftext)
+                    if mb:
+                        members = [m for m in re.findall(
+                            r"(?:mat4|mat3|float|int|uint|bool|vec2|vec3|"
+                            r"vec4|ivec2|ivec3|ivec4|uvec2|dvec2)\s+(\w+)\s*;",
+                            mb.group(1))
+                            if m not in ("qt_Matrix", "qt_Opacity")]
+                if members is not None and members != buf_names:
+                    errs.append(
+                        f'{path}:? ShaderEffect uniform order mismatch with '
+                        f'{os.path.basename(ftarget)}: QML declares '
+                        f'{buf_names} but the buf block lists {members} — '
+                        f'reorder the properties (or the shader block) so '
+                        f'both sides match')
+
+        # ---- v19c: Hyprland.dispatch is centralized -----------------------
+        #  (Catches: a stray raw dispatch — Lua Hyprland evaluates every
+        #  request as `return hl.dispatch(<text>)`, so only services/
+        #  Hypr.qml, which speaks hl.dsp.* + classic fallbacks, may call
+        #  it directly; anything else bypasses the self-healing forms.)
+        if os.path.basename(path) != "Hypr.qml" and \
+           re.search(r"\bHyprland\s*\.\s*dispatch\b", info["code"]):
+            errs.append(f'{path}:? Hyprland.dispatch outside services/'
+                        f'Hypr.qml — route it through Hypr.dispatch() / '
+                        f'Hypr.switchTo() so the Lua/mainline strategy '
+                        f'stays centralized')
+
         for e in errs:
             print("FAIL", e); failures += 1
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v18)")
+    # ---- v19d: GLSL shaders (*.frag / *.vert) ----------------------------
+    #  qsb compiles Vulkan-style GLSL and transpiles to ES 310 / SPIR-V
+    #  itself; `#version 440` must be the first non-comment line. Without
+    #  it qsb parses GLSL ES 1.00 and rejects the source ("ES shaders for
+    #  SPIR-V require version 310 or higher" + "'float': type requires
+    #  declaration of default precision qualifier") — liquidglass.frag
+    #  shipped exactly like that, so the dock silently lost its glass.
+    for spath in shader_files:
+        lines = open(spath, encoding="utf-8", errors="ignore").read().split("\n")
+        first = ""
+        for line in lines:
+            s = line.strip()
+            if not s or s.startswith(("//", "/*", "*")):
+                continue
+            first = s
+            break
+        if not re.match(r"#version\s+440(\s|$)", first):
+            print(f"FAIL {spath}: shader must start with '#version 440' "
+                  f"(missing/old versions are parsed as GLSL ES 1.00 and "
+                  f"rejected by qsb); found: {first[:48]!r}")
+            failures += 1
+        body = re.sub(r"//[^\n]*", " ", "\n".join(lines))
+        body = re.sub(r"/\*.*?\*/", " ", body, flags=re.S)
+        for legacy in ("varying", "attribute", "texture2D", "gl_FragColor",
+                       "gl_FragData"):
+            if re.search(r"\b" + legacy + r"\b", body):
+                print(f"FAIL {spath}: legacy GLSL token '{legacy}' — qsb "
+                      f"needs Vulkan-style GLSL 440 (in/out, texture(), "
+                      f"fragColor)")
+                failures += 1
+
+    print(f"Checked {len(files)} QML files + {len(shader_files)} shaders (v19)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

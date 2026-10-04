@@ -227,19 +227,25 @@ Qt toolchain installed — plain Python 3 is enough:
 python3 scripts/check_hyprnotch.py   # same thing, called directly
 ```
 
-`scripts/check_hyprnotch.py` (v15) parses every `.qml` file in the repo and
-catches the entire class of Quickshell/QML breakages hit while building this
-shell: unbalanced braces, missing imports (including types pulled from the
-wrong module — e.g. ScrollIndicator without QtQuick.Controls), non-portable
-Keys attached convenience handlers (must use the universal `Keys.onPressed`
-+ `event.key` pattern), assignments to non-existent or read-only properties,
-`Behavior on` a read-only target, invalid PanelWindow root properties
-(opacity, etc.), nested `WlrLayershell` enum use (must be standalone
-`WlrKeyboardFocus`), singleton member references, handler/property
-mismatches, duplicate ids, duplicate signal handlers, arrow-if bodies,
-never-started probe loops, and Images decoding model data without
-`sourceSize` (the OOM class). Run it before every commit — if it passes,
-the shell starts.
+`scripts/check_hyprnotch.py` (v19) parses every `.qml` file — plus every
+`.frag` / `.vert` shader — and catches the entire class of Quickshell/QML
+breakages hit while building this shell: unbalanced braces, missing imports
+(including types pulled from the wrong module — e.g. ScrollIndicator without
+QtQuick.Controls), non-portable Keys attached convenience handlers (must use
+the universal `Keys.onPressed` + `event.key` pattern), assignments to
+non-existent or read-only properties, `Behavior on` a read-only target,
+invalid PanelWindow root properties (opacity, etc.), nested `WlrLayershell`
+enum use (must be standalone `WlrKeyboardFocus`), singleton member
+references, handler/property mismatches, duplicate ids, duplicate signal
+handlers, arrow-if bodies, never-started probe loops, Images decoding model
+data without `sourceSize` (the OOM class), anchors that positioners silently
+drop (Row children with left/right/horizontal anchors, Column children with
+top/bottom/vertical anchors — "Row will not function"), GLSL shaders without
+`#version 440` or with legacy ES-1.00 tokens (the qsb class — missing it
+silently killed the Liquid Glass shader), ShaderEffect property order
+drifting out of sync with the shader's `uniform buf` layout, and raw
+`Hyprland.dispatch` calls outside the strategy-aware `services/Hypr.qml`.
+Run it before every commit — if it passes, the shell starts.
 
 Suggested loop when hacking on the shell:
 

@@ -5,6 +5,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Hyprland
 
 Singleton {
@@ -61,37 +62,49 @@ Singleton {
 
     function switchTo(id) {
         //  A previously-learned strategy is used straight away; otherwise
-        //  start with the k4 Lua varargs form and self-heal from there.
-        if (goodStrategy > 1) {
-            switchStrategies(id, goodStrategy)
-            return
-        }
-        //  Strategy 1 (k4 Lua fork): varargs — hl.dispatch("workspace", 2)
-        dispatch("workspace " + id)
-        verify.target = id
-        verify.strategy = 1
-        verify.restart()
+        //  start from strategy 1 and self-heal from there.
+        switchStrategies(id, Math.max(1, goodStrategy))
     }
 
-    //  Strategy that last PROVED to move the focus (1 = the config-aware
+    //  Strategy that last PROVED to move the focus (1 = the Lua-API
     //  default). Learned once, reused for every later click.
     property int goodStrategy: 1
 
     //  Self-healing switch: after each attempt, check whether the focus
-    //  actually moved. If not, escalate: varargs Lua -> single-quoted Lua
-    //  string -> raw mainline. Whichever wins is remembered, so the next
-    //  click takes the working path immediately (k4 forks differ in how
-    //  hl.dispatch accepts arguments; mainline wants the plain form).
+    //  actually moved. If not, escalate. Whichever wins is remembered,
+    //  so the next click takes the working path immediately.
+    //
+    //  Strategy 1 — Lua Hyprland (0.56+ ships the hl.* Lua API; the k4
+    //  build is one of them). The IPC socket evaluates EVERY dispatch
+    //  request as
+    //        return hl.dispatch(<raw request text>)
+    //  so the text itself must BE a Lua expression producing a
+    //  dispatcher object (wiki "Dispatchers": hl.dsp.*). A classic
+    //  "workspace 2" is a Lua SYNTAX error there, and a bare quoted
+    //  name fails with "hl.dispatch: expected a dispatcher" — exactly
+    //  what the r21 log showed for our old quoted form.
+    //  Strategy 2 — classic mainline text form (pre-Lua Hyprland).
+    //  Strategy 3 — hyprctl, the compatibility contract every fork
+    //  must keep; silent (no IPC warn spam) as the last resort.
     function switchStrategies(id, strategy) {
-        if (strategy === 2)
-            Hyprland.dispatch('"workspace ' + id + '"')   // hl.dispatch("workspace 2")
-        else if (strategy === 3)
-            Hyprland.dispatch("workspace " + id)          // raw mainline form
-        else
-            dispatch("workspace " + id)                   // respects hypr.luaDispatch
+        if (strategy === 1)
+            Hyprland.dispatch('hl.dsp.focus({ workspace = ' + id + ' })')
+        else if (strategy === 2)
+            Hyprland.dispatch("workspace " + id)
+        else {
+            ctlSwitch.command = ["hyprctl", "dispatch", "workspace", String(id)]
+            ctlSwitch.running = true
+        }
         verify.target = id
         verify.strategy = strategy
         verify.restart()
+    }
+
+    //  Fire-and-forget hyprctl runner for strategy 3.
+    Process {
+        id: ctlSwitch
+        stdoutEnabled: false
+        stderrEnabled: false
     }
 
     Timer {
@@ -153,35 +166,71 @@ Singleton {
         return ""
     }
 
-    //  ── Dispatch (k4 / Lua-fork compatible) ─────────────────────
-    //  Mainline Hyprland wants  dispatch workspace 2.
-    //  The k4 Lua fork wraps the request verbatim into Lua:
-    //      return hl.dispatch(workspace 2)      <- syntax error
-    //  so the args must be a valid Lua argument LIST. Quoting every
-    //  token keeps the intent readable by both worlds:
-    //      return hl.dispatch("workspace", 2)   <- works on k4
-    //  On mainline Hyprland set config key hypr.luaDispatch = false.
-    function luaArgs(s) {
-        const parts = String(s).trim().split(/\s+/)
-        const out = []
-        for (let i = 0; i < parts.length; ++i) {
-            const p = parts[i]
-            if (p.length === 0)
-                continue
-            if ((p.charAt(0) === '"' && p.charAt(p.length - 1) === '"')
-                || (p.charAt(0) === "'" && p.charAt(p.length - 1) === "'"))
-                out.push(p)
-            else
-                out.push('"' + p.replace(/"/g, '\\"') + '"')
+    //  ── Dispatch (Hyprland 0.56+ Lua API / classic mainline) ────
+    //  Lua Hyprland evaluates every IPC dispatch request as
+    //      return hl.dispatch(<raw request text>)
+    //  so the text must BE a Lua expression producing a dispatcher
+    //  (wiki "Dispatchers": `hl.dsp.*`, fed into `hl.dispatch()`).
+    //  Translate the common mainline bind strings into hl.dsp.* calls;
+    //  anything unknown passes through unchanged (still correct on
+    //  pre-Lua mainline). Set config key hypr.luaDispatch = false to
+    //  force the raw classic form everywhere.
+    function luaNum(s) {
+        const n = Number(s)
+        return Number.isFinite(n) ? String(n) : "0"
+    }
+
+    function luaStr(s) {
+        return "'" + String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'"
+    }
+
+    function luaTranslate(args) {
+        const parts = String(args).trim().split(/\s+/)
+        const name = (parts[0] || "").toLowerCase()
+        const rest = parts.slice(1).join(" ")
+        switch (name) {
+        case "exec":
+            return rest.length > 0
+                ? "hl.dsp.exec_cmd(" + luaStr(rest) + ")" : ""
+        case "workspace":
+            return "hl.dsp.focus({ workspace = " + luaNum(parts[1]) + " })"
+        case "killactive":
+            return "hl.dsp.window.close()"
+        case "togglefloating":
+            return "hl.dsp.window.float({ action = 'toggle' })"
+        case "fullscreen":
+            return "hl.dsp.window.fullscreen({ action = 'toggle' })"
+        case "pin":
+            return "hl.dsp.window.pin({ action = 'toggle' })"
+        case "pseudo":
+            return "hl.dsp.window.pseudo({ action = 'toggle' })"
+        case "movetoworkspace":
+            return "hl.dsp.window.move({ workspace = " + luaNum(parts[1]) + " })"
+        case "movetoworkspacesilent":
+            return "hl.dsp.window.move({ workspace = " + luaNum(parts[1])
+                   + ", follow = false })"
+        case "movefocus":
+            return "hl.dsp.focus({ direction = " + luaStr(parts[1] || "l") + " })"
+        case "focusmonitor":
+            return "hl.dsp.focus({ monitor = " + luaStr(rest) + " })"
+        case "togglespecialworkspace":
+            return "hl.dsp.workspace.toggle_special(" + luaStr(parts[1] || "") + ")"
+        case "reload":
+            return "hl.dsp.reload_config()"
+        default:
+            return ""
         }
-        return out.join(", ")
     }
 
     //  Fire-and-forget dispatch for custom bindings from Settings.
     function dispatch(args) {
-        if (Config.get("hypr.luaDispatch", true))
-            Hyprland.dispatch(luaArgs(args))
-        else
-            Hyprland.dispatch(args)
+        if (Config.get("hypr.luaDispatch", true)) {
+            const lua = luaTranslate(args)
+            if (lua.length > 0) {
+                Hyprland.dispatch(lua)
+                return
+            }
+        }
+        Hyprland.dispatch(args)
     }
 }
