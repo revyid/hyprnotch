@@ -17,19 +17,19 @@ command -v quickshell >/dev/null 2>&1 || {
 }
 
 #  ── HyprNotch IS the notification daemon ─────────────────────────
-#  If mako / dunst / fnott / swaync already grabbed
+#  If mako / dunst / fnott / swaync / xfce4-notifyd already grabbed
 #  org.freedesktop.Notifications, HyprNotch can't render banners in the
-#  pill and you'd see the other daemon's toasts instead. Remove them
-#  from your Hyprland autostart too:
+#  pill and you'd see the other daemon's toasts instead. We stop them,
+#  their user services too (so DBus activation can't resurrect them
+#  behind our back), and you should remove them from autostart:
 #      exec-once mako        <- delete lines like this
-if pgrep -x mako >/dev/null 2>&1 || pgrep -x dunst >/dev/null 2>&1 \
-   || pgrep -x fnott >/dev/null 2>&1 || pgrep -x swaync >/dev/null 2>&1; then
-    pkill -x mako 2>/dev/null
-    pkill -x dunst 2>/dev/null
-    pkill -x fnott 2>/dev/null
-    pkill -x swaync 2>/dev/null
-    echo "[HyprNotch] stopped other notification daemons (mako/dunst/...) — HyprNotch renders banners in the pill now"
-fi
+for d in mako dunst fnott swaync xfce4-notifyd; do
+    pkill -x "$d" 2>/dev/null
+done
+pkill -f xfce4-notifyd 2>/dev/null
+systemctl --user stop dunst.service mako.service swaync.service \
+    fnott.service xfce4-notifyd.service 2>/dev/null
+echo "[HyprNotch] notification field cleared — HyprNotch IS the notification daemon now (banners render in the pill)"
 
 #  ── State directories ────────────────────────────────────────────
 #  Config store and task list live outside the config folder; make

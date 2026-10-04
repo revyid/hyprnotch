@@ -38,7 +38,8 @@ is not.
   configurable via `island.maxVisibleWorkspaces`, overflow shows `+N`),
   status indicators (audio, mic, network with real signal strength,
   battery — clicking it opens the **power menu**), unseen-notifications
-  bell. Pressing **Super+Space** opens the **launcher**.
+  bell. Pressing **Super+Space** opens the **command-palette launcher**
+  (every island action + every app, fully keyboard-driven).
 - **Wi-Fi manager (realtime)** — live network list via NetworkManager:
   signal bars, lock icons, connect/disconnect with a single click, inline
   password form for secured networks, radio toggle, rescan. The scanner
@@ -96,10 +97,15 @@ is not.
   icons and actions.
 - **HUD (inside the pill)** — volume/brightness morph state, driven from
   any source (keys, scrolls, other apps).
-- **Launcher (inside the island)** — opens on **Super+Space** (rebindable
-  in Settings → Keybinds): fuzzy search over DesktopEntries with real
-  icons, 4-column grid, arrow keys + Enter, ESC closes, keyboard
-  exclusive while open.
+- **Launcher = command palette (inside the island)** — opens on
+  **Super+Space** (rebindable in Settings → Keybinds). One search box
+  over EVERYTHING: every island action (control center, calendar,
+  notifications, weather, stats, wallpaper, power, about, plugins,
+  settings, DND, containers, night light, dock, plugin reload,
+  keybind re-apply) plus all installed apps with real icons. Each
+  action row shows its live chord from Settings → Keybinds. Arrow
+  keys / PageUp / PageDown move, Enter runs, Esc closes — the whole
+  notch is drivable without touching the mouse.
 - **Plugins** — drop a `.qml` file into `plugins/` and the island gains a
   peek chip + a full view. Two samples included (Pomodoro, Notes). See
   `plugins/README.md` for the 6-property contract and the service API

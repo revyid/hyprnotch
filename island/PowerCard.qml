@@ -280,7 +280,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     size: 13
                     colorVal: Theme.ink
-                    glyph: Icons.apple
+                    glyph: Icons.distro(SysMon.osId, SysMon.osIdLike)
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter

@@ -142,6 +142,7 @@ Item {
                                     anchors.fill: parent
                                     visible: notifRow.modelData.icon.length > 0
                                     source: visible ? notifRow.modelData.icon : ""
+                                    sourceSize: Qt.size(parent.width * 2, parent.height * 2)
                                     fillMode: Image.PreserveAspectCrop
                                     asynchronous: true
                                 }

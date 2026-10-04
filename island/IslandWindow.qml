@@ -10,17 +10,18 @@ import "../services"
 //    The island Item animates INSIDE it with the signature OutBack
 //    spring, staying centered: the pill never drifts while the body
 //    morphs around it.
-//  · FOUR morph states, all inside the pill (nothing ever pops out):
+//  · FIVE morph states, all inside the pill (nothing ever pops out):
 //      1. compact   — clock, weather, workspaces, status glyphs
 //      2. peek      — hover glance: media, recent notifications,
 //                     live stats, plugin chips
 //      3. hud       — volume / brightness bars slide in under the
 //                     pill when keys change them from anywhere
-//      4. expanded  — a full card: control center, calendar, weather,
+//      4. banner    — the island grows to hold incoming notification
+//                     banners INSIDE its body (r16: they used to
+//                     float as detached cards below the pill)
+//      5. expanded  — a full card: control center, calendar, weather,
 //                     notifications, launcher, stats, wallpaper,
 //                     power, about, or a plugin view
-//  · Notification banners hang directly under the island — same
-//    surface, same window.
 //  · The input mask follows the island; with a view open a full-screen
 //    hunter catches the outside click and closes it (k4's cazaClics).
 
@@ -35,12 +36,19 @@ PanelWindow {
     readonly property bool hudActive: Config.get("hud.enabled", true)
         && !expanded && (Audio.hudOpen || Brightness.hudOpen)
 
+    //  ── Banner state (inline) — notifications INSIDE the island ───
+    //  While banners are alive and no view is open, the island itself
+    //  grows to host them (macOS Dynamic Island behavior). Banner
+    //  state beats peek: a notification takes over the body.
+    readonly property bool bannerActive: !expanded && !hudActive
+        && Notifs.banners.length > 0
+
     //  ── Peek state (hover glance) ─────────────────────────────────
     //  Armed shortly after the pointer settles on the pill, killed the
     //  moment it leaves — the delay keeps a fast pass-over from flashing.
     property bool peekActive: false
     readonly property bool peekWanted: cfg.peekEnabled && !expanded && !hudActive
-        && pillHover.hovered
+        && !bannerActive && pillHover.hovered
 
     onPeekWantedChanged: {
         if (peekWanted)
@@ -78,17 +86,13 @@ PanelWindow {
         ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
 
     //  ── Input mask ────────────────────────────────────────────────
-    //  The island's region follows its animated geometry. With a view
-    //  open, the whole surface joins the region so an outside tap has
-    //  somewhere to land (and closes the view, k4-style). Banners join
-    //  their own region while visible.
+    //  The island's region follows its animated geometry — banners now
+    //  live inside the island body, so one region covers everything.
+    //  With a view open, the whole surface joins the region so an
+    //  outside tap has somewhere to land (closes the view, k4-style).
     mask: Region {
         item: island
 
-        Region {
-            item: bannerHost.active ? bannerHost : null
-            intersection: Intersection.Combine
-        }
         Region {
             item: islandWindow.expanded ? hunter : null
             intersection: Intersection.Combine
@@ -148,6 +152,9 @@ PanelWindow {
     readonly property real targetHeight: {
         if (expanded)
             return cfg.pillHeight + Math.max(80, viewItem ? viewItem.implicitHeight : 200)
+        //  Banners unfold INSIDE the island body (r16).
+        if (bannerActive)
+            return cfg.pillHeight + bannerBody.height + 12
         //  HUD lives INSIDE the pill strip (k4): the notch just widens.
         if (hudActive)
             return cfg.pillHeight
@@ -642,35 +649,29 @@ PanelWindow {
                 Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
             }
 
+            //  ── Notification banners: INSIDE the island body ──────
+            BannersRow {
+                id: bannerBody
+                anchors.top: parent.top
+                width: parent.width
+                preferredWidth: parent.width
+                visible: islandWindow.bannerActive
+                opacity: visible ? 1 : 0
+
+                Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+            }
+
             //  ── Peek glance (hover) ───────────────────────────────
             Loader {
                 id: peekLoader
                 anchors.fill: parent
-                active: islandWindow.peekActive
+                active: islandWindow.peekActive && !islandWindow.bannerActive
 
                 sourceComponent: PeekView {}
 
                 opacity: active ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 180 } }
             }
-        }
-    }
-
-    //  ── Notification banners: hang below the island, same surface ──
-    Item {
-        id: bannerHost
-
-        readonly property bool active: banners.visible && Notifs.banners.length > 0
-            && !islandWindow.expanded
-
-        x: island.x + (island.width - width) / 2
-        y: island.height + 8
-        width: 380
-        height: banners.height
-
-        BannersRow {
-            id: banners
-            preferredWidth: 380
         }
     }
 

@@ -90,8 +90,30 @@ Singleton {
     readonly property string printer:          "\uF02F"
     readonly property string tv:               "\uF26C"
 
-    //  r7: stats / power / wallpaper / about
-    readonly property string apple:            "\uF179"
+    //  r16: distro identity, not Apple. `distro()` maps the os-release
+    //  ID (then ID_LIKE) to a Nerd Font linux logo; unknown distros get
+    //  Tux. Icons stays pure data — pass SysMon.osId / SysMon.osIdLike.
+    function distro(id, like) {
+        const t = (String(id || "") + " " + String(like || "")).toLowerCase()
+        if (t.indexOf("arch") >= 0)     return String.fromCodePoint(0xF303)   // arch / omarchy / artix-adjacent
+        if (t.indexOf("manjaro") >= 0)  return String.fromCodePoint(0xF31A)
+        if (t.indexOf("endeavour") >= 0)return String.fromCodePoint(0xF322)
+        if (t.indexOf("artix") >= 0)    return String.fromCodePoint(0xF31D)
+        if (t.indexOf("void") >= 0)     return String.fromCodePoint(0xF31C)
+        if (t.indexOf("nixos") >= 0)    return String.fromCodePoint(0xF313)
+        if (t.indexOf("ubuntu") >= 0)   return String.fromCodePoint(0xF31B)
+        if (t.indexOf("debian") >= 0)   return String.fromCodePoint(0xF306)
+        if (t.indexOf("devuan") >= 0)   return String.fromCodePoint(0xF307)
+        if (t.indexOf("mint") >= 0)     return String.fromCodePoint(0xF30E)
+        if (t.indexOf("fedora") >= 0)   return String.fromCodePoint(0xF30A)
+        if (t.indexOf("suse") >= 0)     return String.fromCodePoint(0xF314)
+        if (t.indexOf("redhat") >= 0 || t.indexOf("rhel") >= 0) return String.fromCodePoint(0xF316)
+        if (t.indexOf("gentoo") >= 0)   return String.fromCodePoint(0xF30D)
+        if (t.indexOf("slackware") >= 0)return String.fromCodePoint(0xF319)
+        if (t.indexOf("alpine") >= 0)   return String.fromCodePoint(0xF300)
+        return "\uF17C"   // Tux — always resolvable
+    }
+    //  r7 extras: stats / power / wallpaper / about
     readonly property string leaf:             "\uF06C"
     readonly property string balance:          "\uF24E"
     readonly property string gauge:            "\uF0E4"

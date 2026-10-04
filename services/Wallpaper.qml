@@ -136,7 +136,7 @@ Singleton {
         current = path
         Config.set("wallpaper.current", path)
         daemonRunning = true
-        Plugins.toast("Wallpaper", "Applied: " + path.split("/").pop())
+        Notifs.toast("Wallpaper", "Applied: " + path.split("/").pop())
     }
 
     function openFolder() {

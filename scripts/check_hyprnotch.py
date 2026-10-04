@@ -44,6 +44,13 @@ v12 — local type names colliding with Qt built-in attached/element
   importing its module — attached handlers like Keys.onPressed break.
   (Catches: naming a service Keys.qml when the capture editor needs
   QtQuick's attached Keys type; renamed to Hotkeys.)
+v13 — an Image whose source binds modelData (arbitrary file paths:
+  wallpaper thumbnails, app icons from a model) MUST declare
+  sourceSize. Without it Qt decodes every file at FULL resolution —
+  a 4K wallpaper costs ~33 MB per thumbnail, and the wallpaper picker
+  alone OOM-killed the whole shell seconds after opening it.
+  (Catches: "Killed" in ./start.sh logs — systemd-oomd terminating
+  quickshell.)
 """
 import os, re, sys
 
@@ -84,6 +91,7 @@ REQUIRED_MODULE = {
     "ColumnLayout": "QtQuick.Layouts", "TextField": "QtQuick.Controls",
     "TextArea": "QtQuick.Controls", "ScrollBar": "QtQuick.Controls",
     "HoverHandler": "QtQuick", "TapHandler": "QtQuick",
+    "ScrollIndicator": "QtQuick",
     "RotationAnimation": "QtQuick", "Translate": "QtQuick",
     "Region": "Quickshell",
     "Button": "QtQuick.Controls", "ComboBox": "QtQuick.Controls",
@@ -848,12 +856,36 @@ def main():
                         f'built-in (attached/element) type — rename it, e.g. '
                         f'Keys -> Hotkeys')
 
+        # ---- v13: images fed arbitrary model paths must downscale ----------
+        #  (Catches: "Killed" — the wallpaper picker decoded every 4K
+        #  wallpaper at full resolution, gigabytes in seconds.)
+        for m in re.finditer(r"\bImage\s*\{", raw):
+            ln = raw[:m.start()].count("\n") + 1
+            start = m.end() - 1
+            depth = 0
+            end = start
+            for i in range(start, len(raw)):
+                if raw[i] == "{":
+                    depth += 1
+                elif raw[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i
+                        break
+            block = raw[start:end + 1]
+            if re.search(r"\bsource\s*:\s*[^\n]*modelData", block) \
+               and not re.search(r"\bsourceSize\s*:", block):
+                errs.append(f'{path}:{ln} Image fed modelData without '
+                            f'sourceSize — full-resolution decode of '
+                            f'arbitrary files OOM-kills the shell; add '
+                            f'sourceSize: Qt.size(w * 2, h * 2)')
+
         for e in errs:
             print("FAIL", e); failures += 1
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v12)")
+    print(f"Checked {len(files)} QML files (v13)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

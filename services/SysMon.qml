@@ -45,6 +45,8 @@ Singleton {
     //  ── device identity (About card) ──────────────────────────────
     property string hostName: ""
     property string osName: ""
+    property string osId: ""            //  "arch", "ubuntu", … (os-release ID)
+    property string osIdLike: ""        //  "debian arch", … (ID_LIKE fallback)
     property string kernelVer: ""
     property string cpuModel: ""
     property string gpuModel: ""
@@ -78,6 +80,7 @@ HOST=$(hostname 2>/dev/null || head -1 /etc/hostname 2>/dev/null)
 if [ -r /etc/os-release ]; then
   . /etc/os-release 2>/dev/null
   [ -n "$PRETTY_NAME" ] && echo "OS $PRETTY_NAME"
+  [ -n "$ID" ] && echo "OSID $ID $ID_LIKE"
 fi
 echo "KERNEL $(uname -r)"
 CM=$(awk -F: '/model name/{gsub(/^ /,"",$2); print $2; exit}' /proc/cpuinfo 2>/dev/null)
@@ -181,6 +184,9 @@ done`
         switch (parts[0]) {
         case "HOST":  hostName = parts.slice(1).join(" "); break
         case "OS":    osName = parts.slice(1).join(" "); break
+        case "OSID":  osId = (parts[1] || "").toLowerCase()
+                      osIdLike = parts.slice(2).join(" ").toLowerCase()
+                      break
         case "KERNEL":kernelVer = parts.slice(1).join(" "); break
         case "CPUMODEL": cpuModel = parts.slice(1).join(" "); break
         case "GPUMODEL": gpuModel = parts.slice(1).join(" "); break

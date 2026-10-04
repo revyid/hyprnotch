@@ -234,7 +234,7 @@ Item {
 
                 Repeater {
                     model: [
-                        { key: "about",     glyph: Icons.apple,  label: "About This Device",
+                        { key: "about",     glyph: Icons.distro(SysMon.osId, SysMon.osIdLike),  label: "About This Device",
                             sub: SysMon.osName.length > 0 ? SysMon.osName : "Hyprland · HyprNotch" },
                         { key: "stats",     glyph: Icons.chart,  label: "System Monitor",
                             sub: "CPU " + SysMon.cpuPct + "% · RAM " + SysMon.memPct + "%" },

@@ -245,7 +245,10 @@ Item {
                 ? (dockRevealed || dockHover.containsMouse ? 6 : -tray.height - 8)
                 : 6
             radius: 24
-            color: Theme.withAlpha(Theme.islandBg, 0.62)
+            //  Same material as the notch itself (r16): the solid island
+            //  fill instead of a watery translucent gray — the dock and
+            //  the pill now read as one system.
+            color: Theme.islandBg
             border.width: 1
             border.color: Theme.withAlpha(Theme.ink, 0.12)
 

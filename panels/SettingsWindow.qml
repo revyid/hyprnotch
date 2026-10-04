@@ -1999,7 +1999,7 @@ Window {
                         anchors.centerIn: parent
                         size: 24
                         colorVal: Theme.ink
-                        glyph: Icons.apple
+                        glyph: Icons.distro(SysMon.osId, SysMon.osIdLike)
                     }
                 }
                 Column {

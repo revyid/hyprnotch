@@ -69,7 +69,7 @@ Item {
                         anchors.centerIn: parent
                         size: 30
                         colorVal: Theme.ink
-                        glyph: Icons.apple
+                        glyph: Icons.distro(SysMon.osId, SysMon.osIdLike)
                     }
                 }
             }

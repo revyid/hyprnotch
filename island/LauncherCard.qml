@@ -3,14 +3,20 @@ import Quickshell
 import "../core"
 import "../services"
 
-//  App launcher — hosted INSIDE the island body, k4 style: the pill
-//  grows into a search panel right under the clock.
+//  Launcher = the island's COMMAND PALETTE (r16 rework).
 //
-//  Opened by pressing SUPER (bindr on SUPER_L — see sample-hyprland.conf)
-//  or SUPER+D. Fuzzy filter over DesktopEntries (the same engine the
-//  dock uses), 4-column grid with REAL app icons, arrow keys + Enter
-//  run the selection, ESC closes. While hosted, the island window
-//  holds the keyboard exclusively (see IslandWindow).
+//  One search box over everything the notch can do, mouse optional:
+//
+//    · ACTIONS — every island view and switch (control center,
+//      calendar, notifications, weather, stats, wallpaper, power,
+//      about, plugins, settings, DND, containers, night light, dock,
+//      plugin reload, keybind re-apply…). Each row shows the chord
+//      that triggers it, read live from Settings → Keybinds.
+//    · APPLICATIONS — the DesktopEntries grid the launcher always had.
+//
+//  Full keyboard flow: type to filter, Up/Down (or Ctrl+J/K, PageUp/
+//  PageDown) to move, Enter to run, Esc to close. The island window
+//  holds the keyboard exclusively while the launcher is hosted.
 
 Item {
     id: launcherCard
@@ -21,9 +27,160 @@ Item {
 
     //  Island contract
     property int prefWidth: 560
-    implicitHeight: 430
+    implicitHeight: 434
 
-    readonly property var filtered: {
+    //  ── Every island action, palette-ready ────────────────────────
+    //  `act` doubles as the Hotkeys action id where one exists, so the
+    //  chord column always matches what the keybinds editor shows.
+    readonly property var actions: [
+        { act: "controlCenter", icon: Icons.sliders,   title: "Control Center",    sub: "toggles · sliders · media" },
+        { act: "notifications", icon: Icons.bell,      title: "Notifications",     sub: "history and banners" },
+        { act: "calendar",      icon: Icons.calendar,  title: "Calendar",          sub: "this month at a glance" },
+        { act: "stats",         icon: Icons.chart,     title: "System Monitor",    sub: "CPU · memory · network · disk" },
+        { act: "weather",       icon: Icons.cloud,     title: "Weather",           sub: "current + forecast" },
+        { act: "wallpaper",     icon: Icons.image,     title: "Wallpaper",         sub: "picker · transitions · folder" },
+        { act: "power",         icon: Icons.power,     title: "Power & Battery",   sub: "modes · lock · session" },
+        { act: "about",         icon: Icons.info,      title: "About This Device", sub: "machine · distro · build" },
+        { act: "plugins",       icon: Icons.cubes,     title: "Plugins",           sub: "manage installed plugins" },
+        { act: "settings",      icon: Icons.gear,      title: "Settings",          sub: "the full settings window" },
+        { act: "dnd",           icon: Icons.bellSlash, title: "Do Not Disturb",    sub: "silence banners instantly" },
+        { act: "podman",        icon: Icons.server,    title: "Containers",        sub: "podman manager page" },
+        { act: "agent",         icon: Icons.robot,     title: "AI Agent",          sub: "agent settings page" },
+        { act: "nightLight",    icon: Icons.moon,      title: "Night Light",       sub: "warm the screen" },
+        { act: "dock",          icon: Icons.desktop,   title: "Toggle Dock",       sub: "show or hide the dock" },
+        { act: "reloadPlugins", icon: Icons.refresh,   title: "Reload Plugins",    sub: "rescan the plugin folder" },
+        { act: "applyKeys",     icon: Icons.keyboard,  title: "Re-apply Keybinds", sub: "after a hyprctl reload" }
+    ]
+
+    //  ── Flat palette model: header / action / header / apps ───────
+    readonly property var entries: {
+        const q = query.toLowerCase().split(" ").filter(function (s) { return s.length > 0 })
+        const hit = function (hay) {
+            if (q.length === 0)
+                return true
+            for (let j = 0; j < q.length; ++j)
+                if (hay.indexOf(q[j]) < 0)
+                    return false
+            return true
+        }
+
+        const out = []
+
+        const acts = []
+        for (let a = 0; a < actions.length; ++a) {
+            const act = actions[a]
+            if (hit((act.title + " " + act.sub).toLowerCase()))
+                acts.push(act)
+        }
+        if (acts.length > 0) {
+            out.push({ kind: "header", label: "Actions" })
+            for (let i = 0; i < acts.length; ++i)
+                out.push({ kind: "action", act: acts[i].act, icon: acts[i].icon,
+                           title: acts[i].title, sub: acts[i].sub,
+                           hint: Hotkeys.chordLabel(Hotkeys.bindingFor(acts[i].act)) })
+        }
+
+        if (query.trim().length > 0) {
+            const shown = filteredApps.slice(0, 30)
+            if (shown.length > 0) {
+                out.push({ kind: "header", label: "Applications" })
+                for (let s = 0; s < shown.length; ++s)
+                    out.push({ kind: "app", icon: shown[s].icon,
+                               title: shown[s].name, sub: shown[s].id, entry: shown[s].entry })
+            }
+        }
+
+        return out
+    }
+
+    onEntriesChanged: {
+        if (selected >= entries.length || entries[selected] === undefined
+            || entries[selected].kind === "header")
+            firstSelectable()
+    }
+
+    function firstSelectable() {
+        selected = nextSelectable(0, 1)
+    }
+
+    //  Nearest selectable index starting FROM idx, stepping by dir.
+    function nextSelectable(idx, dir) {
+        let i = idx
+        while (i >= 0 && i < entries.length) {
+            if (entries[i] && entries[i].kind !== "header")
+                return i
+            i += dir
+        }
+        return idx >= 0 && idx < entries.length && entries[idx] && entries[idx].kind !== "header" ? idx : 0
+    }
+
+    function move(dir) {
+        let i = selected + dir
+        while (i >= 0 && i < entries.length) {
+            if (entries[i] && entries[i].kind !== "header") {
+                selected = i
+                return
+            }
+            i += dir
+        }
+    }
+
+    function activate(idx) {
+        const e = entries[idx]
+        if (!e || e.kind === "header")
+            return
+        if (e.kind === "action")
+            runAction(e)
+        else
+            run(e.entry)
+    }
+
+    //  ── Actions runner — the whole notch, keyboard-driven ─────────
+    function runAction(e) {
+        switch (e.act) {
+        case "controlCenter":
+        case "calendar":
+        case "notifications":
+        case "weather":
+        case "stats":
+        case "wallpaper":
+        case "power":
+        case "about":
+        case "plugins":
+            UiState.openPopup(e.act)
+            break
+        case "settings":
+            UiState.closeAll()
+            Power.openSettings()
+            break
+        case "podman":
+            UiState.closeAll()
+            Power.openSettings("podman")
+            break
+        case "agent":
+            UiState.closeAll()
+            Power.openSettings("agent")
+            break
+        case "dnd":
+            Notifs.toggleDnd()
+            break
+        case "nightLight":
+            Power.toggleNight()
+            break
+        case "dock":
+            Config.set("dock.enabled", !Config.data.dock.enabled)
+            break
+        case "reloadPlugins":
+            Plugins.reload()
+            break
+        case "applyKeys":
+            Hotkeys.apply()
+            break
+        }
+    }
+
+    //  ── Apps (unchanged engine) ───────────────────────────────────
+    readonly property var filteredApps: {
         const q = query.toLowerCase().split(" ").filter(function (s) { return s.length > 0 })
         const out = []
         for (let i = 0; i < apps.length; ++i) {
@@ -38,7 +195,7 @@ Item {
             if (hit)
                 out.push(a)
         }
-        return out.slice(0, 24)
+        return out
     }
 
     //  Fresh scan every time the island hosts the launcher
@@ -119,23 +276,24 @@ Item {
                 onTextChanged: {
                     launcherCard.query = text
                     launcherCard.selected = 0
+                    launcherCard.firstSelectable()
                 }
 
-                Keys.onUpPressed: {
-                    if (launcherCard.selected > 0)
-                        launcherCard.selected -= 1
+                Keys.onUpPressed: launcherCard.move(-1)
+                Keys.onDownPressed: launcherCard.move(1)
+                Keys.onPageUpPressed: {
+                    for (let i = 0; i < 6; ++i) launcherCard.move(-1)
                 }
-                Keys.onDownPressed: {
-                    if (launcherCard.selected < launcherCard.filtered.length - 1)
-                        launcherCard.selected += 1
+                Keys.onPageDownPressed: {
+                    for (let i = 0; i < 6; ++i) launcherCard.move(1)
                 }
-                Keys.onReturnPressed: launcherCard.run(launcherCard.filtered[launcherCard.selected] ? launcherCard.filtered[launcherCard.selected].entry : null)
-                Keys.onEnterPressed: launcherCard.run(launcherCard.filtered[launcherCard.selected] ? launcherCard.filtered[launcherCard.selected].entry : null)
+                Keys.onReturnPressed: launcherCard.activate(launcherCard.selected)
+                Keys.onEnterPressed: launcherCard.activate(launcherCard.selected)
 
                 Text {
                     anchors.fill: parent
                     visible: searchInput.text.length === 0
-                    text: "Search apps…  (Enter to open, Esc to close)"
+                    text: "Search actions and apps…  (Up/Down select · Enter run · Esc close)"
                     color: Theme.dim
                     font.family: searchInput.font.family
                     font.pixelSize: 13
@@ -144,95 +302,146 @@ Item {
             }
         }
 
-        //  ── App grid: real icons, 4 columns ───────────────────────
-        Flickable {
+        //  ── Palette list: virtualized rows, keyboard-followed ─────
+        ListView {
+            id: list
             width: parent.width
             height: 350
-            contentWidth: width
-            contentHeight: appGrid.implicitHeight
             clip: true
-            interactive: contentHeight > height
+            boundsBehavior: Flickable.StopAtBounds
+            model: launcherCard.entries
+            reuseItems: true
+            spacing: 2
+            ScrollIndicator.vertical: ScrollIndicator {}
 
-            Grid {
-                id: appGrid
-                width: parent.width
-                columns: 4
-                spacing: 8
+            //  Keep the selection on screen as the user arrows around.
+            Connections {
+                target: launcherCard
+                function onSelectedChanged() {
+                    list.positionViewAtIndex(launcherCard.selected, ListView.Contain)
+                }
+            }
 
-                Repeater {
-                    model: launcherCard.filtered
+            delegate: Item {
+                id: rowRoot
+                required property var modelData
+                required property int index
+                readonly property bool isHeader: modelData.kind === "header"
+                readonly property bool sel: launcherCard.selected === index
 
-                    delegate: Item {
-                        id: appCell
-                        required property var modelData
-                        required property int index
-                        readonly property bool sel: launcherCard.selected === index
+                width: list.width
+                height: isHeader ? 26 : 44
 
-                        width: (parent.width - parent.spacing * 3) / 4
-                        height: 76
+                //  ── Section header ───────────────────────────────
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 4
+                    visible: rowRoot.isHeader
+                    text: rowRoot.modelData.label.toUpperCase()
+                    color: Theme.dim
+                    font.family: Theme.uiFont
+                    font.pixelSize: 9
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 1.2
+                }
 
-                        Rectangle {
+                //  ── Action / app row ─────────────────────────────
+                Rectangle {
+                    anchors.fill: parent
+                    visible: !rowRoot.isHeader
+                    radius: Theme.radiusTile
+                    color: rowRoot.sel ? Theme.withAlpha(Theme.accent, 0.22)
+                        : (rowArea.containsMouse ? Theme.withAlpha(Theme.ink, 0.09) : "transparent")
+                    border.width: rowRoot.sel ? 1 : 0
+                    border.color: Theme.accent
+                    scale: rowArea.pressed ? 0.98 : 1
+
+                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+                }
+
+                Row {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    visible: !rowRoot.isHeader
+                    spacing: 10
+
+                    Item {
+                        width: 26
+                        height: 26
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        //  Apps carry a themed icon URL; actions carry a
+                        //  nerd-font glyph — never feed a glyph to Image.
+                        readonly property bool useImg: rowRoot.modelData.kind === "app"
+                            && String(rowRoot.modelData.icon || "").length > 0
+
+                        Image {
                             anchors.fill: parent
-                            radius: Theme.radiusTile
-                            color: appCell.sel ? Theme.withAlpha(Theme.accent, 0.22)
-                                : (cellArea.containsMouse ? Theme.withAlpha(Theme.ink, 0.09) : "transparent")
-                            border.width: appCell.sel ? 1 : 0
-                            border.color: Theme.accent
-                            scale: cellArea.pressed ? 0.94 : 1
-
-                            Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                            Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+                            visible: parent.useImg
+                            source: visible ? rowRoot.modelData.icon : ""
+                            sourceSize: Qt.size(52, 52)
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                            mipmap: true
                         }
-
-                        Column {
+                        Glyph {
                             anchors.centerIn: parent
-                            spacing: 5
-                            width: parent.width - 10
-
-                            Item {
-                                width: 34
-                                height: 34
-                                anchors.horizontalCenter: parent.horizontalCenter
-
-                                Image {
-                                    anchors.fill: parent
-                                    visible: appCell.modelData.icon.length > 0
-                                    source: visible ? appCell.modelData.icon : ""
-                                    sourceSize: Qt.size(68, 68)
-                                    fillMode: Image.PreserveAspectFit
-                                    asynchronous: true
-                                    mipmap: true
-                                    smooth: true
-                                }
-                                Glyph {
-                                    anchors.centerIn: parent
-                                    visible: appCell.modelData.icon.length === 0
-                                    size: 20
-                                    colorVal: Theme.muted
-                                    glyph: Icons.window
-                                }
-                            }
-
-                            Text {
-                                width: parent.width
-                                text: appCell.modelData.name
-                                color: appCell.sel ? Theme.ink : Theme.muted
-                                font.family: Theme.uiFont
-                                font.pixelSize: 9
-                                font.weight: appCell.sel ? Font.DemiBold : Font.Medium
-                                horizontalAlignment: Text.AlignHCenter
-                                elide: Text.ElideRight
-                            }
+                            visible: !parent.useImg
+                            size: 13
+                            colorVal: rowRoot.sel ? Theme.ink : Theme.accent
+                            glyph: rowRoot.modelData.kind === "app" ? Icons.window
+                                : rowRoot.modelData.icon
                         }
+                    }
 
-                        MouseArea {
-                            id: cellArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: launcherCard.run(appCell.modelData.entry)
-                            onContainsMouseChanged: if (containsMouse) launcherCard.selected = appCell.index
+                    Column {
+                        width: parent.width - 26 - 10 - (rowHint.implicitWidth > 0 ? rowHint.implicitWidth + 12 : 0)
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 1
+
+                        Text {
+                            width: parent.width
+                            text: rowRoot.modelData.title
+                            color: rowRoot.sel ? Theme.ink : (rowArea.containsMouse ? Theme.ink : Theme.muted)
+                            font.family: Theme.uiFont
+                            font.pixelSize: 12
+                            font.weight: rowRoot.sel ? Font.DemiBold : Font.Medium
+                            elide: Text.ElideRight
                         }
+                        Text {
+                            width: parent.width
+                            text: rowRoot.modelData.sub
+                            color: Theme.dim
+                            font.family: Theme.uiFont
+                            font.pixelSize: 9
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    Text {
+                        id: rowHint
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: rowRoot.modelData.hint !== undefined ? rowRoot.modelData.hint : ""
+                        visible: text.length > 0
+                        color: rowRoot.sel ? Theme.ink : Theme.dim
+                        font.family: Theme.uiFont
+                        font.pixelSize: 9
+                    }
+                }
+
+                MouseArea {
+                    id: rowArea
+                    anchors.fill: parent
+                    enabled: !rowRoot.isHeader
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: launcherCard.activate(rowRoot.index)
+                    onContainsMouseChanged: {
+                        if (containsMouse && !rowRoot.isHeader)
+                            launcherCard.selected = rowRoot.index
                     }
                 }
             }
