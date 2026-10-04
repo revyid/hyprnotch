@@ -459,7 +459,7 @@ Item {
                     anchors.left: parent.left
                     anchors.leftMargin: 4
                     visible: rowRoot.isHeader
-                    text: rowRoot.modelData.label.toUpperCase()
+                    text: String(rowRoot.modelData.label || "").toUpperCase()
                     color: Theme.dim
                     font.family: Theme.uiFont
                     font.pixelSize: 9
@@ -514,7 +514,7 @@ Item {
                             size: 13
                             colorVal: rowRoot.sel ? Theme.ink : Theme.accent
                             glyph: rowRoot.modelData.kind === "app" ? Icons.window
-                                : rowRoot.modelData.icon
+                                : String(rowRoot.modelData.icon || "")
                         }
                     }
 
@@ -525,7 +525,7 @@ Item {
 
                         Text {
                             width: parent.width
-                            text: rowRoot.modelData.title
+                            text: rowRoot.modelData.title || ""
                             color: rowRoot.sel ? Theme.ink : (rowArea.containsMouse ? Theme.ink : Theme.muted)
                             font.family: Theme.uiFont
                             font.pixelSize: 12
@@ -534,7 +534,7 @@ Item {
                         }
                         Text {
                             width: parent.width
-                            text: rowRoot.modelData.sub
+                            text: rowRoot.modelData.sub || ""
                             color: Theme.dim
                             font.family: Theme.uiFont
                             font.pixelSize: 9

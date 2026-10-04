@@ -86,6 +86,52 @@ Singleton {
         Notifs.toast("HyprNotch", "Copied to clipboard", "paste with Super+V anytime")
     }
 
+    //  ── recall: copy back + type straight into the focused app ───
+    //  The full Win+V flow (r26, "salin ulang + langsung ke paste"):
+    //  one click puts the entry back on the clipboard AND types it
+    //  into whatever window held focus before the island opened.
+    //  wtype writes over the virtual-keyboard protocol — no daemon,
+    //  and it works in terminals too (it is typing, not Ctrl+V).
+    //  Sequencing matters: the island closes first, 0.22 s later
+    //  Hyprland has handed focus back and the entry is typed; the
+    //  toast is held until after that so its banner can never race
+    //  the grab. Binary entries (images) only ever copy — typing
+    //  bytes would just mangle them.
+    function recall(idx) {
+        if (!available)
+            return
+        let entry = null
+        for (let i = 0; i < entries.length; ++i) {
+            if (String(entries[i].idx) === String(idx)) {
+                entry = entries[i]
+                break
+            }
+        }
+        if (entry && entry.binary) {
+            copy(idx)
+            return
+        }
+        const id = shellQuote(String(idx))
+        run("cliphist decode " + id + " | wl-copy >/dev/null 2>&1")
+        if (Power.bins["wtype"] !== true) {
+            Notifs.toast("HyprNotch", "Copied to clipboard",
+                         "install wtype for one-click paste (paru -S wtype)")
+            return
+        }
+        UiState.closeAll()
+        run("sleep 0.22; cliphist decode " + id + " | wtype - >/dev/null 2>&1")
+        pasteToast.restart()
+    }
+
+    //  Fires after the paste window so the banner never steals focus
+    //  mid-type.
+    Timer {
+        id: pasteToast
+        interval: 800
+        onTriggered: Notifs.toast("HyprNotch", "Pasted",
+                                  "entry is back on the clipboard and typed out")
+    }
+
     //  ── delete one / wipe all ─────────────────────────────────────
     function remove(idx) {
         if (!available)

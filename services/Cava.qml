@@ -128,7 +128,7 @@ Singleton {
             if (cava.usingTool) {
                 cava.toolFailed = true
                 cava.usingTool = false
-                cava.watchdog.stop()
+                watchdog.stop()
                 cava.applyEngine()
             }
         }
@@ -143,7 +143,7 @@ Singleton {
             if (cava.usingTool && !cava.gotData) {
                 cava.toolFailed = true
                 cava.usingTool = false
-                cava.cavaProc.running = false
+                cavaProc.running = false
                 cava.applyEngine()
             }
         }

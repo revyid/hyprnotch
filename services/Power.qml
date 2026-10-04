@@ -241,7 +241,7 @@ Singleton {
     Process {
         id: binProbe
         command: ["sh", "-c",
-            "for b in wf-recorder grimblast grim slurp hyprsunset cliphist wl-copy wl-paste podman; do " +
+            "for b in wf-recorder grimblast grim slurp hyprsunset cliphist wl-copy wl-paste podman wtype; do " +
             "command -v \"$b\" >/dev/null 2>&1 && echo \"$b=yes\" || echo \"$b=no\"; done"]
         stdout: StdioCollector {
             onStreamFinished: {

@@ -230,10 +230,10 @@ PanelWindow {
             enabled: !islandWindow.hudActive && !islandWindow.bannerActive
                 && !islandWindow.morphing
 
-            onActiveTranslationChanged: islandWindow.swipeFollow(swipeDrag.activeTranslation)
+            onActiveTranslationChanged: island.swipeFollow(swipeDrag.activeTranslation)
             onActiveChanged: {
                 if (!active)
-                    islandWindow.swipeRelease(swipeDrag.activeTranslation)
+                    island.swipeRelease(swipeDrag.activeTranslation)
             }
         }
 

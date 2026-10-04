@@ -4,11 +4,13 @@ import Quickshell
 import "../core"
 import "../services"
 
-//  Clipboard history — the Win+V panel (r24).
+//  Clipboard history — the Win+V panel (r24, recall rework r26).
 //
-//  Search box on top, history rows below: click a row to put that
-//  entry back on the clipboard, the trash glyph deletes it, the broom
-//  in the header wipes everything. Backed by cliphist (see
+//  Search box on top, history rows below: clicking a row is the full
+//  Win+V flow — the entry goes back on the clipboard AND is typed
+//  straight into the focused window (wtype), so one click pastes it
+//  where you were. The trash glyph deletes a row, the broom in the
+//  header wipes everything. Backed by cliphist (see
 //  services/Clipboard.qml); when the tools are missing the card shows
 //  an honest install hint instead of a fake empty list.
 
@@ -75,7 +77,7 @@ Item {
                 anchors.leftMargin: 96
                 anchors.verticalCenter: parent.verticalCenter
                 text: Clipboard.available
-                    ? Clipboard.entries.length + " items stored"
+                    ? Clipboard.entries.length + " items · click = copy + paste"
                     : "history unavailable"
                 color: Theme.muted
                 font.family: Theme.uiFont
@@ -292,7 +294,7 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Clipboard.copy(clipRow.modelData.idx)
+                    onClicked: Clipboard.recall(clipRow.modelData.idx)
                 }
             }
         }
