@@ -813,6 +813,15 @@ Window {
                 checked: Config.data.island.showBattery
                 onFlipped: Config.set("island.showBattery", !Config.data.island.showBattery)
             }
+
+            SectionLabel { text: "MEDIA"; topPadding: 10 }
+
+            SwitchRow {
+                title: "Audio visualizer (cava)"
+                sub: "spectrum bars while music plays — real cava frames when the binary is installed, a smooth fallback otherwise"
+                checked: Config.get("island.cava", true)
+                onFlipped: Config.set("island.cava", !Config.get("island.cava", true))
+            }
         }
     }
 
@@ -1095,28 +1104,35 @@ Window {
                 model: Hotkeys.actions
 
                 delegate: KeyRow {
-                    required property var modelData
-                    readonly property var meta: Hotkeys.labels[modelData.action]
-                        ? Hotkeys.labels[modelData.action] : { title: modelData.action, sub: "" }
+                    id: keyDelegate
+                    //  Hotkeys.actions is a plain STRING list (the r24
+                    //  user report "kedetec jumlah, tpi kosong": the
+                    //  summary counted 19 applied, but every row read
+                    //  `modelData.action` — which is undefined on a
+                    //  string — so titles, chords and the Edit flow all
+                    //  rendered empty/dead). modelData IS the action id.
+                    readonly property string actionId: String(modelData)
+                    readonly property var meta: Hotkeys.labels[actionId]
+                        ? Hotkeys.labels[actionId] : { title: actionId, sub: "" }
 
-                    action: modelData.action
+                    action: actionId
                     title: meta.title
                     sub: meta.sub
-                    chord: Hotkeys.map[modelData.action] || null
-                    status: (Hotkeys.applyStatus && Hotkeys.applyStatus[modelData.action])
-                        ? Hotkeys.applyStatus[modelData.action] : ""
-                    capturing: settingsWindow.capturingAction === modelData.action
+                    chord: Hotkeys.map[actionId] || null
+                    status: (Hotkeys.applyStatus && Hotkeys.applyStatus[actionId])
+                        ? Hotkeys.applyStatus[actionId] : ""
+                    capturing: settingsWindow.capturingAction === actionId
 
                     onStartCapture: {
-                        settingsWindow.capturingAction = modelData.action
+                        settingsWindow.capturingAction = actionId
                         settingsWindow.capMods = ""
                         settingsWindow.capKey = ""
                         settingsWindow.capMsg = "press a combination  —  Esc cancels"
                     }
-                    onClearChord: Hotkeys.clearBinding(modelData.action)
+                    onClearChord: Hotkeys.clearBinding(actionId)
                     onCancelCapture: settingsWindow.capturingAction = ""
                     onCommitChord: (mods, key) => {
-                        const res = Hotkeys.setBinding(modelData.action, mods, key)
+                        const res = Hotkeys.setBinding(actionId, mods, key)
                         if (res.ok) {
                             settingsWindow.capturingAction = ""
                         } else {
@@ -2028,6 +2044,96 @@ Window {
                 text: Config.data.agent.command
                 placeholder: "e.g. hermes"
                 onCommitted: (v) => Config.set("agent.command", v.trim())
+            }
+
+            //  ── Runner mode (r25): command CLI or the user's own script
+            readonly property var agentModes: [
+                { k: "command", label: "Command" },
+                { k: "script",  label: "My script" }
+            ]
+
+            Row {
+                width: parent.width
+                height: 26
+                spacing: 6
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Runner mode"
+                    color: Theme.muted
+                    font.family: Theme.uiFont
+                    font.pixelSize: 11
+                }
+                Item { width: 8; height: 1 }
+
+                Repeater {
+                    model: agentModes
+
+                    delegate: Rectangle {
+                        id: agentModeChip
+                        required property var modelData
+                        readonly property bool sel: (Config.get("agent.mode", "command")) === modelData.k
+                        width: agentModeLabel.implicitWidth + 20
+                        height: 24
+                        radius: 12
+                        color: sel ? Theme.accent : Theme.surface
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+
+                        Text {
+                            id: agentModeLabel
+                            anchors.centerIn: parent
+                            text: agentModeChip.modelData.label
+                            color: agentModeChip.sel ? "#ffffff" : Theme.muted
+                            font.family: Theme.uiFont
+                            font.pixelSize: 10
+                            font.weight: agentModeChip.sel ? Font.DemiBold : Font.Medium
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Config.set("agent.mode", agentModeChip.modelData.k)
+                        }
+                    }
+                }
+            }
+
+            FieldRow {
+                label: "Script"
+                text: Config.get("agent.script", "")
+                placeholder: "default: ~/.config/hyprnotch/agent.sh"
+                onCommitted: (v) => Config.set("agent.script", v.trim())
+            }
+
+            //  Create the agent script template (never overwrites)
+            Rectangle {
+                width: 250; height: 32
+                radius: Theme.radiusSmall
+                color: agentTplArea.containsMouse ? Theme.surfaceHi : Theme.accent
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Create agent script template"
+                    color: "#ffffff"
+                    font.family: Theme.uiFont
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                MouseArea {
+                    id: agentTplArea; anchors.fill: parent; hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Agent.createScriptTemplate()
+                }
+            }
+
+            Text {
+                text: "My script mode runs your script with the prompt as $1 — point it at any backend (aichat, sgpt, ollama, a curl call). The template lists common options."
+                color: Theme.dim
+                font.family: Theme.uiFont
+                font.pixelSize: 9
+                wrapMode: Text.WordWrap
+                width: parent.width
             }
 
             Text {

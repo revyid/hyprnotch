@@ -207,63 +207,118 @@ PanelWindow {
 
         Component.onCompleted: island.forceActiveFocus()
 
-        //  ── Swipe navigation (r24): drag left/right anywhere on the
-        //  island's empty surface (or scroll the wheel on it) to move
-        //  to the previous / next notch page. Declared FIRST so every
-        //  interactive element above keeps its clicks — this area only
-        //  sees the surface nobody else grabbed.
-        MouseArea {
-            id: swipeArea
-            anchors.fill: parent
+        //  ── Swipe navigation (r25 rework): HOLD the mouse and DRAG
+        //  horizontally — the open card follows the pointer (the morph),
+        //  then either snaps back or commits to the previous / next
+        //  notch page with a slide-and-spring handoff. The wheel is NOT
+        //  a page switcher anymore: scrolling inside the launcher /
+        //  clipboard lists used to fight the page deck and switch pages
+        //  instead (r25 user report) — the wheel now belongs to the
+        //  card under the cursor.
+        //
+        //  A DragHandler (not a MouseArea) on purpose: it takes only a
+        //  passive grab first, so every click under it still lands, and
+        //  the drag works even when it starts on top of a row or tile.
+        property bool swipeArmed: false      // horizontal intent locked in
+        property bool morphing: false        // commit animation in flight
 
-            //  Stay quiet while the HUD flashes or a banner owns the
-            //  body — swiping there would fight those morph states.
-            enabled: !islandWindow.hudActive && !islandWindow.bannerActive
-
-            property real pressX: 0
-            property real pressY: 0
-            property bool tracking: false
-
-            onPressed: (m) => {
-                pressX = m.x
-                pressY = m.y
-                tracking = true
-            }
-            onPositionChanged: (m) => {
-                if (!tracking)
-                    return
-                const dx = m.x - pressX
-                const dy = m.y - pressY
-                if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.8) {
-                    tracking = false
-                    swipeFlash.restart()
-                    UiState.cyclePopup(dx < 0 ? 1 : -1)
-                }
-            }
-            onReleased: tracking = false
-            onCanceled: tracking = false
-        }
-
-        //  Touchpad / mouse wheel on the island = page next / prev.
-        WheelHandler {
+        DragHandler {
+            id: swipeDrag
+            target: null
+            acceptedButtons: Qt.LeftButton
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-            onWheel: (ev) => {
-                const dx = ev.angleDelta.x
-                const dy = ev.angleDelta.y
-                const d = Math.abs(dx) > Math.abs(dy) ? dx : dy
-                if (Math.abs(d) >= 120) {
-                    swipeFlash.restart()
-                    UiState.cyclePopup(d < 0 ? 1 : -1)
-                }
+            enabled: !islandWindow.hudActive && !islandWindow.bannerActive
+                && !islandWindow.morphing
+
+            onActiveTranslationChanged: islandWindow.swipeFollow(swipeDrag.activeTranslation)
+            onActiveChanged: {
+                if (!active)
+                    islandWindow.swipeRelease(swipeDrag.activeTranslation)
             }
         }
 
-        //  Tiny affordance: the pill briefly tilts in the swipe
-        //  direction so a page change is never silent.
+        function swipeFollow(p) {
+            if (morphing)
+                return
+            if (!swipeArmed) {
+                //  Horizontal intent must clearly beat vertical — a
+                //  vertical drag stays a no-op (lists keep their drags).
+                if (Math.abs(p.x) > 14 && Math.abs(p.x) > Math.abs(p.y) * 1.5)
+                    swipeArmed = true
+                else
+                    return
+            }
+            //  Follow with resistance, capped so the card never flies off.
+            const capped = Math.max(-180, Math.min(180, p.x * 0.62))
+            morphLayer.x = capped
+            morphLayer.rotation = capped * 0.012
+            morphLayer.opacity = 1 - Math.min(0.45, Math.abs(capped) / 400)
+        }
+
+        function swipeRelease(p) {
+            if (!swipeArmed || morphing) {
+                swipeArmed = false
+                return
+            }
+            swipeArmed = false
+            if (Math.abs(p.x) > 95)
+                commitSwipe(p.x < 0 ? 1 : -1)
+            else
+                swipeBack.restart()          // spring home, nothing happened
+        }
+
+        function commitSwipe(dir) {
+            if (morphing)
+                return
+            morphing = true
+            morphOut.dir = dir
+            morphOut.restart()
+        }
+
+        //  Page changed from OUTSIDE the drag (keybind / IPC / pill) —
+        //  never leave a half-morphed layer behind.
+        property string morphGuardPage: UiState.activePopup
+        onMorphGuardPageChanged: {
+            if (!morphing) {
+                morphLayer.x = 0
+                morphLayer.rotation = 0
+                morphLayer.opacity = 1
+                swipeArmed = false
+            }
+        }
+
+        //  Below threshold: the card springs home untouched.
+        ParallelAnimation {
+            id: swipeBack
+            NumberAnimation { target: morphLayer; property: "x"; to: 0; duration: 240; easing.type: Easing.OutBack; easing.overshoot: 0.9 }
+            NumberAnimation { target: morphLayer; property: "rotation"; to: 0; duration: 240 }
+            NumberAnimation { target: morphLayer; property: "opacity"; to: 1; duration: 160 }
+        }
+
+        //  Commit: slide out with the drag direction, swap the page,
+        //  slide in from the other side — while the island's own width /
+        //  height springs morph the geometry around the incoming card.
         SequentialAnimation {
-            id: swipeFlash
-            PropertyAnimation { target: island; property: "rotation"; to: -1.6; duration: 90 }
-            PropertyAnimation { target: island; property: "rotation"; to: 0; duration: 160 }
+            id: morphOut
+            property int dir: 1
+
+            ParallelAnimation {
+                NumberAnimation { target: morphLayer; property: "x"; to: morphOut.dir * -170; duration: 140; easing.type: Easing.InQuad }
+                NumberAnimation { target: morphLayer; property: "opacity"; to: 0; duration: 130; easing.type: Easing.InQuad }
+                NumberAnimation { target: morphLayer; property: "scale"; to: 0.9; duration: 140; easing.type: Easing.InQuad }
+            }
+            ScriptAction { script: UiState.cyclePopup(morphOut.dir) }
+            ParallelAnimation {
+                NumberAnimation { target: morphLayer; property: "x"; from: morphOut.dir * 120; to: 0; duration: 300; easing.type: Easing.OutCubic }
+                NumberAnimation { target: morphLayer; property: "opacity"; from: 0; to: 1; duration: 220 }
+                NumberAnimation { target: morphLayer; property: "scale"; from: 0.92; to: 1; duration: 300; easing.type: Easing.OutBack; easing.overshoot: 0.9 }
+            }
+            ScriptAction {
+                script: {
+                    morphLayer.rotation = 0
+                    islandWindow.morphing = false
+                }
+            }
         }
 
         //  ── Silhouette: rounded body + inverted wings ─────────────
@@ -671,44 +726,53 @@ PanelWindow {
             height: island.height - islandWindow.cfg.pillHeight
             clip: true
 
-            //  ── popup view (built-in cards) ───────────────────────
-            Loader {
-                id: viewLoader
+            //  ── Morph layer (r25): the drag-follow / page-handoff
+            //  transform lives HERE, on a dedicated wrapper, so the
+            //  banners and the peek keep their own private animations.
+            Item {
+                id: morphLayer
                 anchors.fill: parent
-                active: UiState.expanded && !islandWindow.pluginView
+                transformOrigin: Item.Center
 
-                sourceComponent: UiState.activePopup === "calendar" ? calComp
-                    : UiState.activePopup === "notifCenter" ? notifComp
-                    : UiState.activePopup === "launcher" ? launcherComp
-                    : UiState.activePopup === "stats" ? statsComp
-                    : UiState.activePopup === "weather" ? weatherComp
-                    : UiState.activePopup === "wallpaper" ? wallpaperComp
-                    : UiState.activePopup === "power" ? powerComp
-                    : UiState.activePopup === "about" ? aboutComp
-                    : UiState.activePopup === "plugins" ? pluginsComp
-                    : UiState.activePopup === "containers" ? containersComp
-                    : UiState.activePopup === "agent" ? agentComp
-                    : UiState.activePopup === "clipboard" ? clipboardComp
-                    : ccComp
+                //  ── popup view (built-in cards) ───────────────────
+                Loader {
+                    id: viewLoader
+                    anchors.fill: parent
+                    active: UiState.expanded && !islandWindow.pluginView
 
-                opacity: active ? 1 : 0
-                y: active ? 0 : -16
-                Behavior on opacity { NumberAnimation { duration: 220 } }
-                Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-            }
+                    sourceComponent: UiState.activePopup === "calendar" ? calComp
+                        : UiState.activePopup === "notifCenter" ? notifComp
+                        : UiState.activePopup === "launcher" ? launcherComp
+                        : UiState.activePopup === "stats" ? statsComp
+                        : UiState.activePopup === "weather" ? weatherComp
+                        : UiState.activePopup === "wallpaper" ? wallpaperComp
+                        : UiState.activePopup === "power" ? powerComp
+                        : UiState.activePopup === "about" ? aboutComp
+                        : UiState.activePopup === "plugins" ? pluginsComp
+                        : UiState.activePopup === "containers" ? containersComp
+                        : UiState.activePopup === "agent" ? agentComp
+                        : UiState.activePopup === "clipboard" ? clipboardComp
+                        : ccComp
 
-            //  ── popup view (plugin) — loads the plugin file itself ─
-            Loader {
-                id: pluginLoader
-                anchors.fill: parent
-                active: islandWindow.pluginView
-                source: active && islandWindow.pluginDescriptor
-                    ? islandWindow.pluginDescriptor.url : ""
+                    opacity: active ? 1 : 0
+                    y: active ? 0 : -16
+                    Behavior on opacity { NumberAnimation { duration: 220 } }
+                    Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                }
 
-                opacity: active ? 1 : 0
-                y: active ? 0 : -16
-                Behavior on opacity { NumberAnimation { duration: 220 } }
-                Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                //  ── popup view (plugin) — loads the plugin file itself ─
+                Loader {
+                    id: pluginLoader
+                    anchors.fill: parent
+                    active: islandWindow.pluginView
+                    source: active && islandWindow.pluginDescriptor
+                        ? islandWindow.pluginDescriptor.url : ""
+
+                    opacity: active ? 1 : 0
+                    y: active ? 0 : -16
+                    Behavior on opacity { NumberAnimation { duration: 220 } }
+                    Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                }
             }
 
             //  ── Notification banners: INSIDE the island body ──────

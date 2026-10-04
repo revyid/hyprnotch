@@ -9,10 +9,10 @@ pragma Singleton
 //
 //  Plugin views are named "plugin:<index-in-Plugins.active>".
 //
-//  r24: swipePages + cyclePopup() power the swipe/scroll navigation —
-//  a horizontal swipe on the notch (or a scroll wheel roll) moves to
-//  the previous/next page exactly like touching through the pages of
-//  a control center.
+//  r24: swipePages + cyclePopup() power the page deck. r25: the deck
+//  moves by HOLD-DRAG only (IslandWindow's DragHandler + morph) — the
+//  scroll wheel no longer switches pages, it belongs to whatever list
+//  the cursor is over (launcher, clipboard, notifications).
 
 import QtQuick
 import Quickshell
@@ -27,7 +27,7 @@ Singleton {
         "containers", "agent", "clipboard"
     ]
 
-    //  The swipe order — also the wheel-scroll order. Only pages that
+    //  The swipe order — the hold-drag page deck. Only pages that
     //  pass isValid + featureAllows participate (a switched-off feature
     //  is skipped, never a dead end).
     readonly property var swipePages: [
@@ -99,9 +99,9 @@ Singleton {
         activePopup = name
     }
 
-    //  ── Swipe / scroll navigation (r24) ───────────────────────────
-    //  dir = +1 (next page, swipe left) | -1 (previous, swipe right).
-    //  From the folded pill, a swipe just opens the first/last page.
+    //  ── Hold-drag page deck (r24 swipe, r25 hold-drag only) ──────
+    //  dir = +1 (next page, drag left) | -1 (previous, drag right).
+    //  From the folded pill, a drag just opens the first/last page.
     function cyclePopup(dir) {
         const pages = []
         for (let i = 0; i < swipePages.length; ++i) {

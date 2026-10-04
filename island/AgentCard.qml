@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell.Io
 import "../core"
 import "../services"
 
@@ -146,7 +147,9 @@ Item {
                     }
                     Text {
                         text: Agent.status === "not installed"
-                            ? "the command below was not found in PATH"
+                            ? (Agent.mode === "script"
+                                ? "the script below does not exist yet"
+                                : "the command below was not found in PATH")
                             : Agent.status === "disabled"
                               ? "enable it in the quick toggles or Settings"
                             : "agent binary found — watching usage"
@@ -165,8 +168,10 @@ Item {
 
             Repeater {
                 model: [
-                    { glyph: Icons.terminal, label: "Command",
-                      value: Agent.command },
+                    { glyph: Icons.terminal, label: "Runner",
+                      value: Agent.mode === "script" ? Agent.scriptPath : Agent.command },
+                    { glyph: Icons.sliders,  label: "Mode",
+                      value: Agent.mode === "script" ? "own script" : "command" },
                     { glyph: Icons.check,    label: "Enabled",
                       value: Agent.enabled ? "yes" : "no" }
                 ]
@@ -208,6 +213,204 @@ Item {
                         horizontalAlignment: Text.AlignRight
                     }
                 }
+            }
+        }
+
+        //  ── Settings (r25): self-config, including your own script ─
+        //  "di agent, buat setting gitu, ntah setting gimana, ntah
+        //  konfigurasi sendiri pake script sendri" — the card now
+        //  carries a compact runner editor: pick the mode, edit the
+        //  command inline, or generate + use your own agent script.
+        Column {
+            width: parent.width
+            spacing: 6
+
+            Text {
+                text: "SETTINGS"
+                color: Theme.dim
+                font.family: Theme.uiFont
+                font.pixelSize: 9
+                font.weight: Font.DemiBold
+                font.letterSpacing: 1.2
+            }
+
+            Row {
+                spacing: 6
+
+                Repeater {
+                    model: [
+                        { k: "command", label: "Command" },
+                        { k: "script",  label: "My script" }
+                    ]
+
+                    delegate: Rectangle {
+                        id: modeChip
+                        required property var modelData
+                        readonly property bool sel: Agent.mode === modelData.k
+                        width: modeChipLabel.implicitWidth + 20
+                        height: 24
+                        radius: 12
+                        color: sel ? Theme.accent : Theme.withAlpha(Theme.ink, 0.08)
+                        scale: modeChipArea.pressed ? 0.94 : 1
+
+                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                        Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
+                        Text {
+                            id: modeChipLabel
+                            anchors.centerIn: parent
+                            text: modeChip.modelData.label
+                            color: modeChip.sel ? "#ffffff" : Theme.muted
+                            font.family: Theme.uiFont
+                            font.pixelSize: 10
+                            font.weight: modeChip.sel ? Font.DemiBold : Font.Medium
+                        }
+                        MouseArea {
+                            id: modeChipArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Config.set("agent.mode", modeChip.modelData.k)
+                        }
+                    }
+                }
+            }
+
+            //  command mode: edit the CLI inline
+            Row {
+                visible: Agent.mode === "command"
+                width: parent.width
+                spacing: 6
+
+                Rectangle {
+                    width: parent.width - 62
+                    height: 30
+                    radius: Theme.radiusSmall
+                    color: Theme.withAlpha(Theme.ink, 0.08)
+                    border.width: cmdInput.activeFocus ? 1 : 0
+                    border.color: Theme.accent
+
+                    TextInput {
+                        id: cmdInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        verticalAlignment: TextInput.AlignVCenter
+                        text: Agent.command
+                        color: Theme.ink
+                        font.family: "monospace"
+                        font.pixelSize: 11
+                        clip: true
+
+                        Keys.onPressed: (ev) => {
+                            if (ev.key === Qt.Key_Return || ev.key === Qt.Key_Enter) {
+                                Config.set("agent.command", text.trim())
+                                focus = false
+                                ev.accepted = true
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    width: 56; height: 30; radius: Theme.radiusSmall
+                    color: cmdApplyArea.containsMouse ? Theme.surfaceHi : Theme.accent
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Save"
+                        color: "#ffffff"
+                        font.family: Theme.uiFont
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+                    MouseArea {
+                        id: cmdApplyArea; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Config.set("agent.command", cmdInput.text.trim())
+                    }
+                }
+            }
+
+            //  script mode: path + template generator + copy path
+            Row {
+                visible: Agent.mode === "script"
+                width: parent.width
+                spacing: 6
+
+                Rectangle {
+                    width: parent.width - 138
+                    height: 30
+                    radius: Theme.radiusSmall
+                    color: Theme.withAlpha(Theme.ink, 0.06)
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        anchors.leftMargin: 10
+                        anchors.right: parent.right
+                        anchors.rightMargin: 10
+                        text: Agent.scriptPath
+                        color: Theme.ink
+                        font.family: "monospace"
+                        font.pixelSize: 9
+                        elide: Text.ElideMiddle
+                    }
+                }
+                Rectangle {
+                    width: 74; height: 30; radius: Theme.radiusSmall
+                    color: scriptNewArea.containsMouse ? Theme.surfaceHi : Theme.accent
+                    Text {
+                        anchors.centerIn: parent
+                        text: "New"
+                        color: "#ffffff"
+                        font.family: Theme.uiFont
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+                    MouseArea {
+                        id: scriptNewArea; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Agent.createScriptTemplate()
+                    }
+                }
+                Rectangle {
+                    width: 58; height: 30; radius: Theme.radiusSmall
+                    color: scriptCopyArea.containsMouse ? Theme.surfaceHi : Theme.track
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Copy"
+                        color: Theme.ink
+                        font.family: Theme.uiFont
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+                    MouseArea {
+                        id: scriptCopyArea; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            copyProc.command = ["sh", "-c",
+                                "printf %s " + Agent.shQuote(Agent.scriptPath) + " | wl-copy"]
+                            copyProc.running = true
+                        }
+                    }
+                }
+
+                Process {
+                    id: copyProc
+                    command: []
+                    onExited: Notifs.toast("Agent", "script path copied",
+                                           "paste it into your editor")
+                }
+            }
+
+            Text {
+                width: parent.width
+                text: Agent.mode === "script"
+                    ? "Your script receives the prompt as $1 and prints the answer. Create it from the template, then edit it with any editor."
+                    : "Type the CLI to run (e.g. hermes, aichat, sgpt). Switch to My script to plug in your own runner."
+                color: Theme.dim
+                font.family: Theme.uiFont
+                font.pixelSize: 9
+                wrapMode: Text.WordWrap
             }
         }
 

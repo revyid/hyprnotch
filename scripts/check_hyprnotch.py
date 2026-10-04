@@ -212,7 +212,7 @@ QT_BASE = {
     "Repeater", "Loader", "Component", "Timer", "Image", "TextInput",
     "TextEdit", "Flickable", "ListView", "Window", "Connections",
     "NumberAnimation", "ColorAnimation", "Behavior", "SequentialAnimation",
-    "ParallelAnimation", "PauseAnimation", "PropertyAnimation",
+    "ParallelAnimation", "PauseAnimation", "PropertyAnimation", "ScriptAction",
     "Qt", "Font", "Easing", "Canvas",
 }
 
@@ -309,6 +309,7 @@ BASE_PROPS = {
                            "alwaysRunToEnd"},
     "SequentialAnimation": I | {"running", "loops", "alwaysRunToEnd"},
     "Behavior": I | {"animation", "enabled"},
+    "ScriptAction": {"script"},
     "HoverHandler": I | {"hovered", "hoverEnabled", "acceptedButtons",
                          "cursorShape", "blocking", "enabled", "point"},
     "TapHandler": I | {"tapped", "pressed", "gesturePolicy", "acceptedButtons",

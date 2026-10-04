@@ -27,6 +27,24 @@ Singleton {
     readonly property bool enabled: Config.get("agent.enabled", true)
     readonly property string command: Config.get("agent.command", "hermes")
 
+    //  ── Self-config (r25: "konfigurasi sendiri pake script sendri") ─
+    //  mode "command" runs the CLI from the PATH (as before); mode
+    //  "script" hands the prompt as $1 to the user's own script —
+    //  default ~/.config/hyprnotch/agent.sh — which they can point at
+    //  any backend. A template generator lives below so the file can
+    //  be created straight from the notch card.
+    readonly property string mode: Config.get("agent.mode", "command") === "script" ? "script" : "command"
+    readonly property string scriptPath: {
+        const saved = String(Config.get("agent.script", ""))
+        if (saved.length > 0)
+            return saved
+        return Config.configDir + "/hyprnotch/agent.sh"
+    }
+
+    function shQuote(s) {
+        return "'" + String(s).replace(/'/g, "'\\''") + "'"
+    }
+
     //  Usage/status (persisted through Config so numbers survive)
     readonly property int runs: {
         const n = Config.get("agent.usage.runs", 0)
@@ -62,7 +80,13 @@ Singleton {
             messages = copy.slice(-60)
             return
         }
-        const cmd = command + " " + p.replace(/'/g, "'\\''")
+        runWasScript = (mode === "script")
+        const check = runWasScript
+            ? "test -f " + shQuote(scriptPath)
+            : "command -v " + command + " >/dev/null 2>&1"
+        const run = runWasScript
+            ? "sh " + shQuote(scriptPath) + " " + shQuote(p)
+            : command + " " + p.replace(/'/g, "'\\''")
         const copy = messages.slice()
         copy.push({ role: "user", text: p })
         messages = copy
@@ -75,9 +99,11 @@ Singleton {
             lastPrompt: p.length > 120 ? p.substring(0, 120) + "…" : p,
             lastOutput: lastOutput
         })
-        runCmd.command = ["sh", "-c", "command -v " + command + " >/dev/null 2>&1 && " + cmd + " 2>&1 || echo AGENT_MISSING"]
+        runCmd.command = ["sh", "-c", check + " && " + run + " 2>&1 || echo AGENT_MISSING"]
         runCmd.running = true
     }
+
+    property bool runWasScript: false
 
     Process {
         id: runCmd
@@ -86,7 +112,9 @@ Singleton {
                 const t = text.trim()
                 let out
                 if (t === "AGENT_MISSING") {
-                    out = "Command not found: " + agent.command
+                    out = agent.runWasScript
+                        ? "Agent script not found: " + agent.scriptPath
+                        : "Command not found: " + agent.command
                     agent.binaryAvailable = false
                 } else {
                     out = t.length > 0 ? t : "(no output)"
@@ -108,13 +136,71 @@ Singleton {
         }
     }
 
-    //  Own binary probe at startup (does not fork a shell — checks
-    //  PATH once via the same trick Power uses; cheap and silent).
+    //  ── Binary / script probe ────────────────────────────────────
+    //  Re-runs whenever the runner config changes (mode, command,
+    //  script path) so "not installed" never lies about the CURRENT
+    //  configuration. One cheap command -v / test -f per probe.
+    function probe() {
+        if (binProbe.running)
+            return
+        binProbe.command = ["sh", "-c",
+            mode === "script"
+                ? "test -f " + shQuote(scriptPath) + " && echo yes || echo no"
+                : "command -v " + command + " >/dev/null 2>&1 && echo yes || echo no"]
+        binProbe.running = true
+    }
+
     Process {
         id: binProbe
-        command: ["sh", "-c", "command -v " + command + " >/dev/null 2>&1 && echo yes || echo no"]
+        command: []
         stdout: StdioCollector {
             onStreamFinished: agent.binaryAvailable = (text.trim() === "yes")
+        }
+    }
+
+    onModeChanged: probe()
+    onCommandChanged: probe()
+    onScriptPathChanged: probe()
+
+    //  ── Template generator (r25) ──────────────────────────────────
+    //  Writes the agent script (chmod +x) straight from the notch
+    //  card / Settings, so "konfigurasi sendiri pake script sendri"
+    //  is one click. Never overwrites an existing script.
+    readonly property string scriptTemplate:
+        "#!/bin/sh\n" +
+        "#  HyprNotch agent runner - edit freely, it is YOUR script.\n" +
+        "#  Invoked as: agent.sh \"<prompt>\" - print the answer to stdout.\n" +
+        "#  Plug in any backend you like, e.g.\n" +
+        "#    exec aichat \"$1\"\n" +
+        "#    exec sgpt \"$1\"\n" +
+        "#    exec ollama run llama3.2 \"$1\"\n" +
+        "PROMPT=\"${1:-}\"\n" +
+        "if command -v aichat >/dev/null 2>&1; then exec aichat \"$PROMPT\"; fi\n" +
+        "if command -v sgpt   >/dev/null 2>&1; then exec sgpt \"$PROMPT\"; fi\n" +
+        "if command -v ollama >/dev/null 2>&1; then exec ollama run llama3.2 \"$PROMPT\"; fi\n" +
+        "echo \"no AI CLI found - edit this script to plug in your own\"\n"
+
+    function createScriptTemplate() {
+        mkScriptCmd.command = ["sh", "-c",
+            "mkdir -p " + shQuote(Config.configDir + "/hyprnotch") +
+            " && if [ ! -f " + shQuote(scriptPath) + " ]; then printf %s " + shQuote(scriptTemplate) + " > " + shQuote(scriptPath) + "; fi" +
+            " && chmod +x " + shQuote(scriptPath) +
+            " && echo done"]
+        mkScriptCmd.running = true
+    }
+
+    Process {
+        id: mkScriptCmd
+        command: []
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.trim() === "done") {
+                    agent.probe()
+                    Notifs.toast("Agent", "agent script ready", agent.scriptPath)
+                } else {
+                    Notifs.toast("Agent", "could not create the script", agent.scriptPath)
+                }
+            }
         }
     }
 
@@ -123,5 +209,5 @@ Singleton {
         thinking = false
     }
 
-    Component.onCompleted: binProbe.running = true
+    Component.onCompleted: probe()
 }

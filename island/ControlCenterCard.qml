@@ -1161,8 +1161,10 @@ Item {
         id: mediaComp
 
         Rectangle {
+            id: mediaTile
             width: parent ? parent.width : 0
-            height: visible && Media.hasPlayer ? 92 : 0
+            readonly property bool showCava: Media.playing && Cava.enabled
+            height: visible && Media.hasPlayer ? (showCava ? 120 : 92) : 0
             radius: Theme.radiusTile
             color: Theme.surfaceHi
             visible: Media.hasPlayer
@@ -1252,6 +1254,17 @@ Item {
                             }
                         }
                     }
+                }
+
+                //  ── Live spectrum (r25): "cava pas musicnya idup" —
+                //  real cava frames when the binary exists, a smooth
+                //  synthetic fallback otherwise; flat when paused.
+                CavaBars {
+                    width: parent.width
+                    visible: mediaTile.showCava
+                    maxHeight: 18
+                    barWidth: 4
+                    gap: 5
                 }
 
                 //  ── Live progress (ticks every second while playing) ─

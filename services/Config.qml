@@ -38,7 +38,10 @@ Singleton {
             pillHeight: 34,
             clockOpensCalendar: true,
             maxVisibleWorkspaces: 5,
-            peekEnabled: true
+            peekEnabled: true,
+            //  r25: audio spectrum while music plays (real cava binary
+            //  when installed, smooth synthetic fallback otherwise).
+            cava: true
         },
         controlCenter: {
             enabled: true,
@@ -147,7 +150,12 @@ Singleton {
         agent: {
             enabled: true,
             command: "hermes",
-            useShell: true
+            useShell: true,
+            //  r25: runner mode — "command" runs the CLI directly,
+            //  "script" hands the prompt to the user's own script
+            //  (agent.script, template creatable from the notch card).
+            mode: "command",
+            script: ""
         },
         system: {
             pollSeconds: 3

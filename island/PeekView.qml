@@ -26,6 +26,7 @@ Item {
 
     //  ── sizing logic ──────────────────────────────────────────────
     readonly property bool hasMedia: Media.hasPlayer
+    readonly property bool showCava: Media.playing && Cava.enabled
     readonly property int notifRows: Math.min(Notifs.history.length, 2)
     readonly property bool showNotifs: notifRows > 0
     readonly property bool showStats: Config.get("island.peekEnabled", true)
@@ -98,7 +99,7 @@ Item {
                 }
 
                 Column {
-                    width: parent.width - 30 - 32 - 20
+                    width: parent.width - 30 - 32 - 20 - (peek.showCava ? 78 : 0)
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 3
 
@@ -135,6 +136,14 @@ Item {
                         font.pixelSize: 9
                         elide: Text.ElideRight
                     }
+                }
+
+                //  ── Live spectrum (r25): only while actually playing ──
+                CavaBars {
+                    visible: peek.showCava
+                    opacity: visible ? 1 : 0
+                    anchors.verticalCenter: parent.verticalCenter
+                    maxHeight: 22
                 }
 
                 Rectangle {

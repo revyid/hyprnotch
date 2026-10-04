@@ -13,6 +13,7 @@ ClipboardCard 1.0 ClipboardCard.qml
 ContainersCard 1.0 ContainersCard.qml
 AgentCard 1.0 AgentCard.qml
 PeekView 1.0 PeekView.qml
+CavaBars 1.0 CavaBars.qml
 BannersRow 1.0 BannersRow.qml
 StatGraph 1.0 StatGraph.qml
 StatChip 1.0 StatChip.qml

@@ -104,13 +104,17 @@ is not.
   Settings → Dock (size, magnification amount and radius, screen edge,
   full length, reserve space, margin, background opacity, click action,
   auto-hide + delay, primary-display-only, reset pins).
-- **Swipe the notch (r24)** — drag the island's surface left/right (or
-  roll the wheel over it) to move through the page deck: control
-  center → notifications → calendar → launcher → stats → weather →
-  wallpaper → containers → agent → clipboard → power → about →
-  plugins. Switched-off features are skipped, never dead ends. The
-  pill tilts a degree in the swipe direction so a page change is
-  never silent.
+- **Swipe the notch (r25 rework: hold + drag + morph)** — HOLD the mouse
+  on the island and DRAG horizontally: the open card follows the pointer
+  with resistance, tilting and dimming as it stretches, then either
+  springs home or commits to the next/previous page of the deck with a
+  slide-out / slide-in morph while the island's own width/height springs
+  reshape around it. Deck order: control center → notifications →
+  calendar → launcher → stats → weather → wallpaper → containers →
+  agent → clipboard → power → about → plugins. Switched-off features are
+  skipped, never dead ends. The scroll wheel is deliberately NOT a page
+  switcher anymore — it scrolls whatever list is under the cursor
+  (launcher, clipboard, notifications) instead of flipping pages.
 - **Quick toggles (r24)** — the per-feature enable/disable switches now
   live INSIDE the notch: Control Center → System → Quick Toggles (or
   Super+A). Control Center, Launcher, Notifications, Calendar,
@@ -128,6 +132,13 @@ is not.
   toast feedback, and missing tools are REPORTED instead of failing
   silently ("record kenapa ga works ya" — because wf-recorder wasn't
   installed, and nobody told you).
+- **Audio visualizer (r25, cava)** — while music actually plays, a
+  slim spectrum grows under the media tile and in the hover peek.
+  Backed by the real `cava` binary when installed (generated config,
+  streamed line-by-line, auto-sensing amplitude, watchdog demotion if
+  the sink monitor is unavailable); otherwise a smooth synthetic
+  motion — flat when paused either way. Toggle: Settings → Island →
+  Media, or the `island.cava` key.
 - **Notifications (HyprNotch IS the daemon)** — Quickshell's
   NotificationServer claims org.freedesktop.Notifications, so banners
   render INSIDE the island window under the pill: app icon, summary, body,
@@ -157,7 +168,8 @@ is not.
 - **Settings window** — the classic deep-configuration surface: island
   toggles/sizes, control-center sections (reorder/enable/resize), quick
   actions editor, dock pins and behavior, calendar, notifications, HUD,
-  launcher, tasks, Podman manager, Hermes agent.
+  launcher, tasks, Podman manager, AI agent (runner mode: command CLI or
+  your own script, template generator built in).
 
 ## Install / run
 
@@ -192,8 +204,9 @@ Three ways, pick any:
 **Every chord is editable live** in Settings → Keybinds: click Edit, press
 the new combination, save. Saving unbinds the old Notch bind, registers
 the new one, and rewrites `hyprnotch.lua` on k4 Lua forks so the edit
-survives reloads. Factory chords: Super+Space launcher, Super+C control
-center, Super+T stats, and friends.
+survives reloads. (r25 fix: the page previously counted its chords but
+rendered zero rows — the list and the editor work now.) Factory chords:
+Super+Space launcher, Super+C control center, Super+T stats, and friends.
 
 Highlights (see `sample-hyprland.conf` for all):
 
@@ -226,12 +239,14 @@ names: `controlCenter`, `calendar`, `notifications`, `launcher`, `weather`,
 
 Everything persists at `~/.config/hyprnotch/config.json` and applies live.
 Notable keys: `island.maxVisibleWorkspaces`, `island.peekEnabled`,
+`island.cava` (audio visualizer),
 `wallpaper.dir/transition/duration`, `dock.pinned` (.desktop id strings —
 managed live from the dock: right-click → Add Application / Remove,
 drag to reorder), `dock.autoHide`, `dock.position` (bottom / top /
 left / right), `dock.magnification` + `dock.magnificationRadius`,
 `dock.clickAction` (focus-or-launch / launch), `dock.blur` (frosted
 compositor blur, default true), `clipboard.enabled`,
+`agent.mode` (command / script), `agent.script`,
 `plugins.disabled`, `quickActions`, `controlCenter.sections`,
 `hypr.luaDispatch` (default `true` — quote dispatch args for the k4 Lua
 fork; set to `false` on mainline Hyprland).
