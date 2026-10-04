@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+
+# Editor / OS noise
+.DS_Store
+*.bak
+*.orig
+*~
+
+# Local build artifacts (the release zip lives outside this repo)
+*.zip

@@ -1,0 +1,16 @@
+IslandWindow 1.0 IslandWindow.qml
+ControlCenterCard 1.0 ControlCenterCard.qml
+CalendarCard 1.0 CalendarCard.qml
+NotifCenterCard 1.0 NotifCenterCard.qml
+LauncherCard 1.0 LauncherCard.qml
+StatsCard 1.0 StatsCard.qml
+WeatherCard 1.0 WeatherCard.qml
+WallpaperCard 1.0 WallpaperCard.qml
+PowerCard 1.0 PowerCard.qml
+AboutCard 1.0 AboutCard.qml
+PeekView 1.0 PeekView.qml
+BannersRow 1.0 BannersRow.qml
+StatGraph 1.0 StatGraph.qml
+StatChip 1.0 StatChip.qml
+SessionButton 1.0 SessionButton.qml
+AboutRow 1.0 AboutRow.qml
