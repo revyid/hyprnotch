@@ -30,32 +30,21 @@ Item {
     //  Headroom above the icon row: magnified icons rise into this.
     readonly property int headroom: Math.round(iconSize * 0.55) + 12
 
-    //  ── Magnification source of truth ─────────────────────────────
-    property int hoverIndex: -1
+    //  ── Magnification: continuous pointer-follow wave ─────────────
+    //  macOS cosine falloff over distance from the POINTER to each
+    //  icon's center (Swift-Dock math) — not a fixed 3-icon halo, so
+    //  the wave bends smoothly as the cursor sweeps the shelf.
+    property real pointerTrayX: -1
 
-    Timer {
-        id: hoverReset
-        interval: 90
-        onTriggered: dockRoot.hoverIndex = -1
-    }
-
-    function noteHover(i, hovered) {
-        if (hovered) {
-            hoverReset.stop()
-            hoverIndex = i
-        } else if (hoverIndex === i) {
-            hoverReset.restart()
-        }
-    }
-
-    function magnifyFor(i) {
-        if (!cfg.magnify || hoverIndex < 0)
+    function growAt(cx) {
+        if (!cfg.magnify || pointerTrayX < 0)
             return 0
-        const d = Math.abs(i - hoverIndex)
-        if (d > 2)
+        const R = iconSize * 2.6
+        const d = Math.abs(pointerTrayX - cx)
+        if (d >= R)
             return 0
-        const falloff = [1.0, 0.45, 0.16]
-        return falloff[d] * iconSize * 0.5
+        const f = 0.5 * (1 + Math.cos(Math.PI * d / R))
+        return f * iconSize * 0.5
     }
 
     //  ── DesktopEntries helpers ────────────────────────────────────
@@ -235,6 +224,24 @@ Item {
         visible: dockRoot.cfg.enabled
         implicitHeight: dockRoot.dockHeight + dockRoot.headroom
 
+        readonly property real winH: dockRoot.dockHeight + dockRoot.headroom
+
+        //  ── Liquid Glass backdrop: wallpaper + the live windows behind
+        //  the dock, composed in screen coordinates.  Never visible on
+        //  screen — the GlassSurface's ShaderEffectSource hides it while
+        //  sampling it (hideSource).
+        GlassBackdrop {
+            id: glassBackdrop
+            x: 0
+            y: -(dockWindow.screen.height - dockWindow.winH)
+            screenW: dockWindow.screen.width
+            screenH: dockWindow.screen.height
+            screenName: dockWindow.screen.name || ""
+            zoneTop: glassBackdrop.screenH - dockWindow.winH - 48
+            live: glassFx.ready && dockRoot.cfg.enabled
+                && (!dockRoot.cfg.autoHide || dockRevealed)
+        }
+
         Rectangle {
             id: tray
             height: dockRoot.dockHeight + dockRoot.headroom
@@ -254,9 +261,29 @@ Item {
 
             Behavior on anchors.bottomMargin { NumberAnimation { duration: Theme.animSlow; easing.type: Theme.easingType } }
 
-            //  Glass read: vertical sheen + top hairline gloss
+            //  ── Liquid Glass slab (r19 — technique from 0-ss/Swift-Dock)
+            //  Refracts the wallpaper + the live windows behind the dock.
+            //  The shader is compiled once with qsb and cached; without
+            //  it the frosted material below stays in charge — never fatal.
+            GlassSurface {
+                id: glassFx
+                anchors.centerIn: parent
+                backdropItem: glassBackdrop
+                glassW: tray.width
+                glassH: tray.height
+                glassX: tray.x
+                glassY: tray.y
+                screenH: glassBackdrop.screenH
+                winH: dockWindow.winH
+                radius: tray.radius
+                active: dockRoot.cfg.enabled && dockRoot.cfg.liquid
+            }
+
+            //  Glass read: vertical sheen + top hairline gloss (fallback
+            //  material — steps aside while the shader glass is on screen)
             Rectangle {
                 anchors.fill: parent
+                visible: !glassFx.ready
                 radius: parent.radius
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: Theme.withAlpha(Theme.ink, 0.16) }
@@ -272,6 +299,7 @@ Item {
                 anchors.margins: 1
                 height: 1
                 radius: 1
+                visible: !glassFx.ready
                 color: Theme.withAlpha(Theme.ink, 0.22)
             }
 
@@ -279,6 +307,9 @@ Item {
                 id: dockHover
                 anchors.fill: parent
                 hoverEnabled: true
+                acceptedButtons: Qt.NoButton
+                onPositionChanged: dockRoot.pointerTrayX = mouseX
+                onContainsMouseChanged: if (!containsMouse) dockRoot.pointerTrayX = -1
             }
 
             RowLayout {
@@ -306,8 +337,7 @@ Item {
                             && (Hypr.runningClasses.indexOf(pin.modelData.cls || pin.modelData.name.toLowerCase()) >= 0
                                 || Hypr.focusedClass === (pin.modelData.cls || pin.modelData.name.toLowerCase()))
                         active: dockRoot.cfg.showRunning && Hypr.focusedClass === (pin.modelData.cls || pin.modelData.name.toLowerCase())
-                        grow: dockRoot.magnifyFor(pin.index)
-                        onTileHovered: function (h) { dockRoot.noteHover(pin.index, h) }
+                        grow: dockRoot.growAt(dockRow.x + pin.x + pin.width / 2)
                         onClicked: {
                             if (pin.isApp) {
                                 pin.bounce()
@@ -347,8 +377,7 @@ Item {
                         label: run.modelData.name
                         running: true
                         active: run.modelData.cls === Hypr.focusedClass
-                        grow: dockRoot.magnifyFor(run.flatIndex)
-                        onTileHovered: function (h) { dockRoot.noteHover(run.flatIndex, h) }
+                        grow: dockRoot.growAt(dockRow.x + run.x + run.width / 2)
                         onClicked: Hypr.dispatch("focuswindow class:" + run.modelData.cls)
                     }
                 }

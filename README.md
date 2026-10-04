@@ -82,11 +82,19 @@ is not.
 - **Dock (real macOS anatomy)** — **real application icons** resolved
   through the system icon theme and .desktop entries (three-pass match:
   icon name → lowercase → DesktopEntries), soft drop shadows, no tiles,
-  neighbor-falloff magnification, launch **bounce**, press squish, running
-  dots under icons (white = focused), hover tooltips, frosted glass shelf.
+  pointer-following **cosine magnification wave** (the swell bends
+  smoothly as the cursor sweeps the shelf), launch **bounce**, press
+  squish, running dots under icons (white = focused), hover tooltips.
   Pinned apps are `.desktop` ids (legacy glyph pins still work); running
   unpinned apps join the dock automatically; clicking a pinned app focuses
   it if running, otherwise launches it via its desktop entry.
+- **Dock Liquid Glass** — the shelf is a slab of refracting glass: a
+  fragment shader (ported from [0-ss/Swift-Dock](https://github.com/0-ss/Swift-Dock))
+  bends the wallpaper and the LIVE windows behind the dock — squircle
+  bezel refraction, chromatic dispersion, specular rim, grain and a soft
+  drop shadow. The shader compiles once with `qsb` (qt6-shadertools) on
+  first use and is cached; without qsb the dock falls back to its frosted
+  glass automatically. Toggle in Settings → Dock → Liquid Glass.
 - **Notifications (HyprNotch IS the daemon)** — Quickshell's
   NotificationServer claims org.freedesktop.Notifications, so banners
   render INSIDE the island window under the pill: app icon, summary, body,

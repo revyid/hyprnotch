@@ -70,6 +70,10 @@ v15 — Keys attached CONVENIENCE handlers are not portable across
   with explicit event.key checks (the IslandWindow pattern).
   (Catches: LauncherCard.qml[288:22] onPageDownPressed and any future
   on<Nav>Pressed / on<Fk>Pressed convenience handler.)
+v16 — Liquid Glass round: ScreencopyView (Quickshell.Wayland),
+  ShaderEffect / ShaderEffectSource / ListModel (QtQuick) added to the
+  module map so the new dock glass components are import-checked like
+  everything else.
 """
 import os, re, sys
 
@@ -119,6 +123,9 @@ REQUIRED_MODULE = {
     "Shape": "QtQuick.Shapes", "ShapePath": "QtQuick.Shapes",
     "PathArc": "QtQuick.Shapes", "PathLine": "QtQuick.Shapes",
     "Binding": "QtQuick", "Canvas": "QtQuick",
+    "ShaderEffect": "QtQuick", "ShaderEffectSource": "QtQuick",
+    "ListModel": "QtQuick",
+    "ScreencopyView": "Quickshell.Wayland",
     "MultiEffect": "QtQuick.Effects",
 }
 
@@ -925,7 +932,7 @@ def main():
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v15)")
+    print(f"Checked {len(files)} QML files (v16)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

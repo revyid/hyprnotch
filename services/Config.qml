@@ -71,6 +71,7 @@ Singleton {
             dockHeight: 62,
             showRunning: true,
             magnify: true,
+            liquid: true,
             pinned: [
                 { label: "Terminal",  glyph: "\uF120", command: "" },
                 { label: "Files",     glyph: "\uF07B", command: "" },

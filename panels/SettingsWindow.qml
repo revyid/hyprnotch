@@ -1211,6 +1211,12 @@ Window {
                 checked: Config.data.dock.magnify
                 onFlipped: Config.set("dock.magnify", !Config.data.dock.magnify)
             }
+            SwitchRow {
+                title: "Liquid Glass"
+                sub: "refracts the wallpaper and live windows behind the dock (falls back to frosted glass without qsb)"
+                checked: Config.data.dock.liquid
+                onFlipped: Config.set("dock.liquid", !Config.data.dock.liquid)
+            }
             SliderRow {
                 title: "Icon size"
                 from: 28; to: 60

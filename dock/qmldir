@@ -1,2 +1,4 @@
 Dock 1.0 Dock.qml
 DockIcon 1.0 DockIcon.qml
+GlassBackdrop 1.0 GlassBackdrop.qml
+GlassSurface 1.0 GlassSurface.qml
