@@ -202,14 +202,17 @@ Qt toolchain installed — plain Python 3 is enough:
 python3 scripts/check_hyprnotch.py   # same thing, called directly
 ```
 
-`scripts/check_hyprnotch.py` (v5) parses every `.qml` file in the repo and
+`scripts/check_hyprnotch.py` (v14) parses every `.qml` file in the repo and
 catches the entire class of Quickshell/QML breakages hit while building this
-shell: unbalanced braces, missing imports, assignments to non-existent or
-read-only properties, `Behavior on` a read-only target, invalid PanelWindow
-root properties (opacity, etc.), nested `WlrLayershell` enum use (must be
-standalone `WlrKeyboardFocus`), singleton member references, handler/property
-mismatches, and duplicate ids. Run it before every commit — if it passes,
-the shell starts.
+shell: unbalanced braces, missing imports (including types pulled from the
+wrong module — e.g. ScrollIndicator without QtQuick.Controls), assignments to
+non-existent or read-only properties, `Behavior on` a read-only target,
+invalid PanelWindow root properties (opacity, etc.), nested `WlrLayershell`
+enum use (must be standalone `WlrKeyboardFocus`), singleton member
+references, handler/property mismatches, duplicate ids, duplicate signal
+handlers, arrow-if bodies, never-started probe loops, and Images decoding
+model data without `sourceSize` (the OOM class). Run it before every commit —
+if it passes, the shell starts.
 
 Suggested loop when hacking on the shell:
 

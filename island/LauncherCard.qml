@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import Quickshell
 import "../core"
 import "../services"

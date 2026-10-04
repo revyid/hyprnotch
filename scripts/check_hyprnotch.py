@@ -51,6 +51,15 @@ v13 — an Image whose source binds modelData (arbitrary file paths:
   alone OOM-killed the whole shell seconds after opening it.
   (Catches: "Killed" in ./start.sh logs — systemd-oomd terminating
   quickshell.)
+v14 — ScrollIndicator/ScrollBar live in QtQuick.Controls, NOT QtQuick.
+  The v13 import map claimed ScrollIndicator -> "QtQuick", so a file
+  using `ScrollIndicator.vertical: ScrollIndicator {}` with only
+  `import QtQuick` passed validation and then failed at load time with
+  "ScrollIndicator is not a type" — which cascades: LauncherCard ->
+  IslandWindow -> "Failed to load configuration".  Map corrected, and
+  the whole QtQuick.Controls family is now held to the same rule.
+  (Catches: @island/LauncherCard.qml[315:13]: ScrollIndicator is not
+  a type — launcher/wallpaper picker dead on r16.)
 """
 import os, re, sys
 
@@ -91,7 +100,7 @@ REQUIRED_MODULE = {
     "ColumnLayout": "QtQuick.Layouts", "TextField": "QtQuick.Controls",
     "TextArea": "QtQuick.Controls", "ScrollBar": "QtQuick.Controls",
     "HoverHandler": "QtQuick", "TapHandler": "QtQuick",
-    "ScrollIndicator": "QtQuick",
+    "ScrollIndicator": "QtQuick.Controls",
     "RotationAnimation": "QtQuick", "Translate": "QtQuick",
     "Region": "Quickshell",
     "Button": "QtQuick.Controls", "ComboBox": "QtQuick.Controls",
@@ -885,7 +894,7 @@ def main():
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v13)")
+    print(f"Checked {len(files)} QML files (v14)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:
