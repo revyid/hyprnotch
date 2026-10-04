@@ -27,6 +27,12 @@ v7 — <Prop>Changed handlers on module-type objects: the target must be
 v8 — arrow-function bodies must be an expression or a {block}:
   `=> if (...)` is invalid JS.  (Catches: 'Unexpected token `if' /
   'Expected token `,`' — onPositionChanged: (m) => if (pressed) f())
+v9 — duplicate signal handlers on one object: the engine rejects the
+  second assignment and the whole file fails to load.
+v10 — object declaration through an id (`settingsWindow.AboutGroup {`):
+  ids are NOT types or namespaces — inline/local components must be
+  referenced by bare name.  (Catches: 'settingsWindow.AboutGroup -
+  settingsWindow is neither a type nor a namespace')
 """
 import os, re, sys
 
@@ -783,12 +789,26 @@ def main():
                 else:
                     seen_h[h] = ln
 
+        # ---- v10: object declared through an id (`lower.Upper {`) ---------
+        #  `id.Type { }` is invalid QML — ids are not types/namespaces.
+        #  (Catches: 'settingsWindow.AboutGroup - settingsWindow is neither
+        #   a type nor a namespace' — inline components must be referenced
+        #   by bare name; type-qualified names start uppercase.)
+        for idx in range(len(toks) - 3):
+            a, b, c, d = toks[idx], toks[idx+1], toks[idx+2], toks[idx+3]
+            if (a[0] == "id" and a[1][:1].islower()
+                    and b[0] == "p" and b[1] == "."
+                    and c[0] == "id" and c[1][:1].isupper()
+                    and d[0] == "p" and d[1] == "{"):
+                errs.append(f'{path}:{c[2]} object declared as "{a[1]}.{c[1]}" '
+                            f'— ids are not types/namespaces; write "{c[1]} {{ }}"')
+
         for e in errs:
             print("FAIL", e); failures += 1
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v9)")
+    print(f"Checked {len(files)} QML files (v10)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

@@ -1604,7 +1604,7 @@ Window {
                     width: (parent.width - 24) / 2
                     spacing: 14
 
-                    settingsWindow.AboutGroup {
+                    AboutGroup {
                         width: parent.width
                         title: "Machine"
                         glyph: Icons.laptop
@@ -1623,7 +1623,7 @@ Window {
                     width: (parent.width - 24) / 2
                     spacing: 14
 
-                    settingsWindow.AboutGroup {
+                    AboutGroup {
                         width: parent.width
                         title: "Desktop"
                         glyph: Icons.desktop
@@ -1635,7 +1635,7 @@ Window {
                         ]
                     }
 
-                    settingsWindow.AboutGroup {
+                    AboutGroup {
                         width: parent.width
                         title: "The notch"
                         glyph: Icons.circleCheck
