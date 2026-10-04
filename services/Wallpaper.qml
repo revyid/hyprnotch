@@ -1,10 +1,13 @@
 pragma Singleton
 
-//  Wallpaper service — swww under the hood.
+//  Wallpaper service — awww or swww under the hood.
 //
-//  Scans the usual wallpaper folders (plus a user-configured one),
-//  lists previews for the picker grid, and applies images with swww
-//  transitions. The daemon is started on demand if it is not running.
+//  awww is the maintained fork that ships on Omarchy-style systems; the
+//  two are CLI-identical, so the tool is auto-detected once at startup
+//  (awww preferred, swww as fallback). Scans the usual wallpaper
+//  folders (plus a user-configured one), lists previews for the picker
+//  grid, and applies images with live transitions. The daemon is
+//  started on demand if it is not running.
 
 import QtQuick
 import Quickshell
@@ -18,8 +21,9 @@ Singleton {
     property var files: []               //  absolute paths
     property string current: Config.get("wallpaper.current", "")
     property bool scanning: false
-    property bool available: false       //  swww binary exists
+    property bool available: false       //  wallpaper tool (awww/swww) exists
     property bool daemonRunning: false
+    property string tool: "swww"         //  detected CLI: awww or swww
 
     readonly property string extraDir: Config.get("wallpaper.dir", "")
     readonly property string transition: Config.get("wallpaper.transition", "grow")
@@ -62,12 +66,20 @@ Singleton {
     Process {
         id: checkProbe
         command: ["sh", "-c",
-            "command -v swww >/dev/null 2>&1 && echo yes || echo no; " +
-            "(pgrep -x swww-daemon >/dev/null 2>&1 || pgrep -x swww >/dev/null 2>&1) && echo daemon || true"]
+            "if command -v awww >/dev/null 2>&1; then echo tool awww; " +
+            "elif command -v swww >/dev/null 2>&1; then echo tool swww; fi; " +
+            "(pgrep -x awww-daemon >/dev/null 2>&1 || pgrep -x awww >/dev/null 2>&1 || " +
+            " pgrep -x swww-daemon >/dev/null 2>&1 || pgrep -x swww >/dev/null 2>&1) && echo daemon || true"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const lines = text.trim().split("\n")
-                wallpaper.available = (lines.indexOf("yes") >= 0)
+                for (let i = 0; i < lines.length; ++i) {
+                    const parts = lines[i].trim().split(/\s+/)
+                    if (parts[0] === "tool" && parts[1])
+                        wallpaper.tool = parts[1]
+                }
+                wallpaper.available = (wallpaper.tool.length > 0 &&
+                                       lines.findIndex(l => l.startsWith("tool")) >= 0)
                 wallpaper.daemonRunning = (lines.indexOf("daemon") >= 0)
             }
         }
@@ -115,8 +127,8 @@ Singleton {
         const esc = String(path).replace(/'/g, "'\\''")
         let cmd = ""
         if (!daemonRunning)
-            cmd += "(swww-daemon >/dev/null 2>&1 & disown; sleep 0.4); "
-        cmd += "swww img '" + esc + "'" +
+            cmd += "(" + tool + "-daemon >/dev/null 2>&1 & disown; sleep 0.4); "
+        cmd += tool + " img '" + esc + "'" +
                " --transition-type " + transition +
                " --transition-duration " + duration +
                " --transition-fps 60 2>/dev/null"

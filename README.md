@@ -69,10 +69,12 @@ is not.
   hostname, distro, and staggered-reveal spec rows (chip, graphics,
   memory, startup disk, kernel, uptime, desktop) fed live by the SysMon
   identity probe.
-- **Wallpaper picker (swww)** — scans ~/Pictures, Downloads and the system
+- **Wallpaper picker (awww / swww)** — scans ~/Pictures, Downloads and the system
   wallpaper dirs (custom dir configurable), real thumbnail grid, one tap
-  applies with a swww transition (grow / outer / wipe / fade / simple /
-  random, duration configurable), check badge on the current one.
+  applies with a live transition (grow / outer / wipe / fade / simple /
+  random, duration configurable), check badge on the current one. The
+  tool is auto-detected: awww (Omarchy-style fork) preferred, swww as
+  fallback.
 - **Quick actions** — built-ins (DND, night light, screenshot, record,
   terminal, files, wallpaper, stats, power, about, lock, settings) plus
   unlimited custom shell-command actions.
@@ -109,7 +111,7 @@ is not.
 ## Install / run
 
 ```sh
-# deps (Arch): quickshell, hyprland, nerd font (MesloLGS NF), swww (optional)
+# deps (Arch): quickshell, hyprland, nerd font (MesloLGS NF), awww or swww (optional)
 tar xf hyprnotch-v1.zip && cd hyprnotch
 ./start.sh
 ```

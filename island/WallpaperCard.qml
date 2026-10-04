@@ -54,7 +54,7 @@ Item {
                 font.weight: Font.DemiBold
             }
             Text {
-                text: Wallpaper.available ? "" : "· swww not found"
+                text: Wallpaper.available ? "" : "· " + Wallpaper.tool + " not found"
                 color: Theme.orange
                 font.family: Theme.uiFont
                 font.pixelSize: 9
@@ -272,7 +272,7 @@ Item {
 
         Text {
             visible: !Wallpaper.available
-            text: "Install swww to enable live transitions:  paru -S swww"
+            text: "Install awww (or swww) to enable live transitions:  paru -S awww"
             color: Theme.dim
             font.family: Theme.uiFont
             font.pixelSize: 9

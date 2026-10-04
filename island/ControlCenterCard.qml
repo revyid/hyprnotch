@@ -239,7 +239,7 @@ Item {
                         { key: "stats",     glyph: Icons.chart,  label: "System Monitor",
                             sub: "CPU " + SysMon.cpuPct + "% · RAM " + SysMon.memPct + "%" },
                         { key: "wallpaper", glyph: Icons.image,  label: "Wallpaper",
-                            sub: Wallpaper.available ? (Wallpaper.current.length > 0 ? Wallpaper.fileName(Wallpaper.current) : "Pick an image") : "swww not found" }
+                            sub: Wallpaper.available ? (Wallpaper.current.length > 0 ? Wallpaper.fileName(Wallpaper.current) : "Pick an image") : Wallpaper.tool + " not found" }
                     ]
 
                     delegate: Rectangle {

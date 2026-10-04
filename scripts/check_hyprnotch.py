@@ -33,6 +33,11 @@ v10 — object declaration through an id (`settingsWindow.AboutGroup {`):
   ids are NOT types or namespaces — inline/local components must be
   referenced by bare name.  (Catches: 'settingsWindow.AboutGroup -
   settingsWindow is neither a type nor a namespace')
+v11 — infinite-loop probe processes must be started: a Process whose
+  shell command ends in `while :; do ... done` only produces data if it
+  is running.  The file must set `running: true` on the Process or
+  assign `<id>.running = true` somewhere.  (Catches: 'system stats are
+  stuck at 0' — SysMon probes declared but never started.)
 """
 import os, re, sys
 
@@ -803,12 +808,23 @@ def main():
                 errs.append(f'{path}:{c[2]} object declared as "{a[1]}.{c[1]}" '
                             f'— ids are not types/namespaces; write "{c[1]} {{ }}"')
 
+        # ---- v11: infinite-loop probes must be started ---------------------
+        #  (Catches: stats stuck at 0 — a Process with `while :; do ...`
+        #  in its shell command that is never given running: true.)
+        raw = info["raw"]
+        if re.search(r"while\s*(:|true)\s*;", raw):
+            if not (re.search(r"\brunning\s*:\s*true\b", raw)
+                    or re.search(r"\.[ \t]*running[ \t]*=[ \t]*true\b", raw)):
+                errs.append(f'{path}:? infinite shell-loop probe ("while :; do") '
+                            f'is never started — add "running: true" to the '
+                            f'Process or set <id>.running = true')
+
         for e in errs:
             print("FAIL", e); failures += 1
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v10)")
+    print(f"Checked {len(files)} QML files (v11)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

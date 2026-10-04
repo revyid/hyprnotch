@@ -74,31 +74,40 @@ if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && command -v hyprctl >/dev/null 2>
     #  its modmask can be matched together, never across entries.
     TAKEN="$(hyprctl -j binds 2>/dev/null | sed 's/},{/}\n{/g' || true)"
 
-    #  taken <key> — exit 0 when that key is bound under Super (bit 64).
-    #  Every line after the sed split is exactly ONE bind object, so key
-    #  and modmask are matched together, never across entries. Bias: when
-    #  in doubt we LEAVE the key alone — a skipped bind is visible in this
-    #  log, a hijacked chord is worse.
+    #  taken <key> — reads bind JSON lines on stdin, exits 0 when that key
+    #  is bound under Super (bit 64).  Every line after the sed split is
+    #  exactly ONE bind object, so key and modmask are matched together,
+    #  never across entries.  Bias: when in doubt we LEAVE the key alone —
+    #  a skipped bind is visible in this log, a hijacked chord is worse.
     taken() {
-        printf '%s\n' "$TAKEN" | awk -v k="$(printf '%s' "$1" | tr 'A-Z' 'a-z')" '
+        awk -v k="$(printf '%s' "$1" | tr 'A-Z' 'a-z')" '
             {
                 line = tolower($0)
-                if (index(line, "\"key\":\"" k "\"") > 0) {
-                    m = 0
-                    if (match(line, /"modmask":[0-9]+/))
-                        m = substr(line, RSTART + 10, RLENGTH - 10) + 0
-                    if (int(m / 64) % 2 == 1)
-                        found = 1
+                if (match(line, /"key"[ \t]*:[ \t]*"[^"]*"/)) {
+                    seg = substr(line, RSTART, RLENGTH)
+                    gsub(/^"key"[ \t]*:[ \t]*"/, "", seg)
+                    gsub(/"$/, "", seg)
+                    if (seg == k) {
+                        m = 0
+                        if (match(line, /"modmask"[ \t]*:[ \t]*[0-9]+/)) {
+                            mseg = substr(line, RSTART, RLENGTH)
+                            gsub(/[^0-9]/, "", mseg)
+                            m = mseg + 0
+                        }
+                        if (int(m / 64) % 2 == 1)
+                            found = 1
+                    }
                 }
             }
             END { if (found) exit 0; exit 1 }
         '
     }
+    bind_lines() { hyprctl -j binds 2>/dev/null | sed 's/},{/}\n{/g' || true; }
 
     reg() {
         #  reg <flag> <key> <ipc-function>
         _flag="$1"; _key="$2"; _fn="$3"
-        if taken "$_key"; then
+        if printf '%s\n' "$TAKEN" | taken "$_key"; then
             echo "[HyprNotch] bind SUPER+$_key already taken — left untouched"
             return 0
         fi
@@ -121,7 +130,29 @@ if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && command -v hyprctl >/dev/null 2>
     reg bind  S settings
     reg bind  B dnd
     reg bind  P podman
-    unset -f reg taken
+
+    #  ── Super-tap insurance ────────────────────────────────────────
+    #  The k4 Lua fork re-applies its own bind set asynchronously, which
+    #  can wipe runtime `hyprctl keyword` binds registered a moment
+    #  earlier — Super-tap then silently dies while the chord binds from
+    #  hyprnotch.lua keep working.  So 2 s after launch, re-check and
+    #  re-assert the Super_L release bind ONLY if it is really gone
+    #  (registering twice would make one tap toggle the island twice).
+    (
+        sleep 2
+        if bind_lines | taken SUPER_L; then
+            echo "[HyprNotch] super-tap bind verified live"
+        else
+            if hyprctl keyword "bindr SUPER,SUPER_L,exec,$NOTCH_IPC launcher" >/dev/null 2>&1; then
+                echo "[HyprNotch] super-tap bind had been wiped — re-asserted"
+            else
+                echo "[HyprNotch] WARNING: super-tap did not stick. Add this line to your"
+                echo "           Hyprland config:  bindr = SUPER, SUPER_L, exec, $NOTCH_IPC launcher"
+            fi
+        fi
+    ) &
+
+    unset -f reg taken bind_lines
 fi
 
 echo "[HyprNotch] launching: $INSTALLED/shell.qml"

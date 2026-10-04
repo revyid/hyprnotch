@@ -51,27 +51,29 @@ have_pacman=0
 command -v pacman >/dev/null 2>&1 && have_pacman=1
 
 opt() {
-    #  opt <binary> <pkg> <why>
-    if command -v "$1" >/dev/null 2>&1; then
-        ok "$1 present"
-        return
-    fi
-    printf "    install %s? [y/N] " "$1"
+    #  opt <binary[|alt]> <pkg> <why> — any of the binaries counts as present
+    for b in $(printf '%s' "$1" | tr '|' ' '); do
+        if command -v "$b" >/dev/null 2>&1; then
+            ok "$b present"
+            return
+        fi
+    done
+    printf "    install %s? [y/N] " "$2"
     read -r ans || ans=""
     case "$ans" in
         y|Y)
             if [ "$have_pacman" -eq 1 ]; then
                 if sudo pacman -S --needed "$2"; then
-                    ok "$1 installed"
+                    ok "$2 installed"
                 else
-                    warn "could not install $1 — HyprNotch degrades gracefully"
+                    warn "could not install $2 — HyprNotch degrades gracefully"
                 fi
             else
-                warn "no pacman (not Arch) — install $1 manually. Why: $3"
+                warn "no pacman (not Arch) — install $2 manually. Why: $3"
             fi
             ;;
         *)
-            warn "skipping $1 — HyprNotch degrades gracefully"
+            warn "skipping $2 — HyprNotch degrades gracefully"
             ;;
     esac
 }
@@ -80,7 +82,7 @@ printf '\n'
 info "Optional integrations (decline anything you don't want):"
 opt nmcli             networkmanager             "Wi-Fi manager tiles"
 opt brightnessctl     brightnessctl              "brightness HUD + slider"
-opt swww              swww                       "wallpaper picker transitions"
+opt "awww|swww"       swww                       "wallpaper picker transitions (awww fork or swww)"
 opt playerctl         playerctl                  "media helper (MPRIS is built-in anyway)"
 opt powerprofilesctl  power-profiles-daemon      "battery Energy Mode"
 opt podman            podman                     "container manager panel"

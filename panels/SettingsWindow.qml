@@ -1280,7 +1280,7 @@ Window {
         }
     }
 
-    //  ── Wallpapers — the swww picker, full-window edition ─────────
+    //  ── Wallpapers — the awww/swww picker, full-window edition ─────
     Component {
         id: wallpapersPage
 
@@ -1288,7 +1288,7 @@ Window {
             width: parent ? parent.width : 0
             spacing: 8
 
-            SectionLabel { text: "WALLPAPER — swww, with live transitions" }
+            SectionLabel { text: "WALLPAPER — awww / swww, with live transitions" }
 
             //  The island card, reused whole. It lays itself out from
             //  prefWidth; 720 gives the thumbnail grid four columns.

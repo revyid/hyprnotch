@@ -147,6 +147,7 @@ done`
     Process {
         id: mainProbe
         command: ["sh", "-c", sysmon.probe]
+        running: true
         stdout: SplitParser {
             onRead: function (line) { sysmon.parse(String(line).trim()) }
         }
@@ -161,6 +162,7 @@ done`
     Process {
         id: netProbe
         command: ["sh", "-c", sysmon.netProbe]
+        running: true
         stdout: SplitParser {
             onRead: function (line) { sysmon.parse(String(line).trim()) }
         }
