@@ -38,8 +38,26 @@ v11 — infinite-loop probe processes must be started: a Process whose
   is running.  The file must set `running: true` on the Process or
   assign `<id>.running = true` somewhere.  (Catches: 'system stats are
   stuck at 0' — SysMon probes declared but never started.)
+v12 — local type names colliding with Qt built-in attached/element
+  types: a singleton or inline component named Keys/Layout/Settings/
+  Timer/... shadows (or ambiguates) the QtQuick type in every file
+  importing its module — attached handlers like Keys.onPressed break.
+  (Catches: naming a service Keys.qml when the capture editor needs
+  QtQuick's attached Keys type; renamed to Hotkeys.)
 """
 import os, re, sys
+
+#  Qt types a local QML type must never be named after — attached types
+#  first (shadowing them silently breaks their attached handlers), then
+#  high-traffic elements every file instantiates.
+QT_BUILTIN_NAMES = {
+    "Keys", "Layout", "Settings", "State", "AnchorChanges",
+    "ParentChange", "PropertyChanges", "SystemPalette", "StandardPaths",
+    "Font",
+    "Timer", "Process", "Image", "Text", "MouseArea", "Item",
+    "Rectangle", "Column", "Row", "Flickable", "Loader", "Repeater",
+    "Canvas", "Gradient",
+}
 
 ROOT = (sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -819,12 +837,23 @@ def main():
                             f'is never started — add "running: true" to the '
                             f'Process or set <id>.running = true')
 
+        # ---- v12: local type names colliding with Qt built-ins -------------
+        #  (Catches: a singleton named Keys.qml would shadow QtQuick's
+        #  attached Keys type in every file importing its module —
+        #  Keys.onPressed silently breaks / the type becomes ambiguous.)
+        local_names = {os.path.splitext(os.path.basename(path))[0]}
+        local_names.update(re.findall(r"\bcomponent\s+(\w+)\s*:", raw))
+        for bad in sorted(local_names & QT_BUILTIN_NAMES):
+            errs.append(f'{path}:? type name "{bad}" collides with a Qt '
+                        f'built-in (attached/element) type — rename it, e.g. '
+                        f'Keys -> Hotkeys')
+
         for e in errs:
             print("FAIL", e); failures += 1
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v11)")
+    print(f"Checked {len(files)} QML files (v12)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

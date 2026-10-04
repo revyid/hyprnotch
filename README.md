@@ -38,7 +38,7 @@ is not.
   configurable via `island.maxVisibleWorkspaces`, overflow shows `+N`),
   status indicators (audio, mic, network with real signal strength,
   battery — clicking it opens the **power menu**), unseen-notifications
-  bell. Pressing Super/Win opens the **launcher**.
+  bell. Pressing **Super+Space** opens the **launcher**.
 - **Wi-Fi manager (realtime)** — live network list via NetworkManager:
   signal bars, lock icons, connect/disconnect with a single click, inline
   password form for secured networks, radio toggle, rescan. The scanner
@@ -96,9 +96,10 @@ is not.
   icons and actions.
 - **HUD (inside the pill)** — volume/brightness morph state, driven from
   any source (keys, scrolls, other apps).
-- **Launcher (inside the island)** — opens on **Super/Win** (see below) or
-  SUPER+D: fuzzy search over DesktopEntries with real icons, 4-column
-  grid, arrow keys + Enter, ESC closes, keyboard exclusive while open.
+- **Launcher (inside the island)** — opens on **Super+Space** (rebindable
+  in Settings → Keybinds): fuzzy search over DesktopEntries with real
+  icons, 4-column grid, arrow keys + Enter, ESC closes, keyboard
+  exclusive while open.
 - **Plugins** — drop a `.qml` file into `plugins/` and the island gains a
   peek chip + a full view. Two samples included (Pomodoro, Notes). See
   `plugins/README.md` for the 6-property contract and the service API
@@ -124,9 +125,13 @@ and launches the shell.
 
 Three ways, pick any:
 
-1. **Zero config (default)** — `start.sh` registers every bind at runtime
-   via `hyprctl keyword` on each launch. Keys already bound under Super are
-   left untouched. Binds die on a manual `hyprctl reload`; re-run start.sh.
+1. **Zero config (default)** — `services/Hotkeys.qml` applies the chord map
+   ~1.5 s after the shell starts (and re-asserts once more at ~5.5 s, the
+   k4 fork can wipe runtime binds by re-applying its config async). Keys
+   held by YOUR other binds are never hijacked. Binds die on a manual
+   `hyprctl reload`; re-apply with
+   `quickshell ipc -p ~/.config/quickshell/hyprnotch/shell.qml call notch applyKeys`
+   or re-run start.sh.
 2. **Classic config** — append `sample-hyprland.conf` to your
    `hyprland.conf` (the installer does it for you on request).
 3. **k4 Lua fork** (`~/.config/hypr/hyprland.lua`) — the installer writes
@@ -134,12 +139,16 @@ Three ways, pick any:
    `require("config.hyprnotch")` into your `hyprland.lua`. Revert = delete
    both. The same trick the k4 installer uses.
 
+**Every chord is editable live** in Settings → Keybinds: click Edit, press
+the new combination, save. Saving unbinds the old Notch bind, registers
+the new one, and rewrites `hyprnotch.lua` on k4 Lua forks so the edit
+survives reloads. Factory chords: Super+Space launcher, Super+C control
+center, Super+T stats, and friends.
+
 Highlights (see `sample-hyprland.conf` for all):
 
 ```conf
-# Tap Super/Win → launcher springs out of the pill
-bindr = SUPER, SUPER_L, exec, $notch launcher
-
+bind = SUPER, SPACE, exec, $notch launcher    # launcher (was Super-tap till r14)
 bind = SUPER, C, exec, $notch controlCenter   # control center
 bind = SUPER, K, exec, $notch calendar        # calendar
 bind = SUPER, W, exec, $notch weather         # weather menu
@@ -154,7 +163,7 @@ it the command silently does nothing):
 `quickshell ipc -p ~/.config/quickshell/hyprnotch/shell.qml call notch <name>` —
 names: `controlCenter`, `calendar`, `notifications`, `launcher`, `weather`,
 `stats`, `wallpaper`, `power`, `about`, `settings`, `dnd`, `nightLight`,
-`podman`, `agent`, `reloadPlugins`, `closeAll`.
+`podman`, `agent`, `reloadPlugins`, `applyKeys`, `closeAll`.
 
 ## Configuration
 
@@ -172,8 +181,10 @@ fork; set to `false` on mainline Hyprland).
 - **Plugins menu** — `Super+O`, or Control Center → Plugins → Manage.
   Toggle, open, and reload plugins; drop new `.qml` files into
   `~/.config/quickshell/hyprnotch/plugins/` and press refresh.
-- **Keybinds** — `sample-hyprland.conf` defines the `$notch` variable so
-  every island view is bindable; `install.sh` can append them for you.
+- **Keybinds** — Settings → Keybinds edits every chord live (capture a
+  combo, save, done); `sample-hyprland.conf` defines the `$notch` variable
+  so every island view is also bindable by hand; `install.sh` can append
+  them for you.
 
 ## Development & testing
 

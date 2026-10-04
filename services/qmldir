@@ -15,3 +15,4 @@ singleton Plugins 1.0 Plugins.qml
 singleton Tasks 1.0 Tasks.qml
 singleton Podman 1.0 Podman.qml
 singleton Agent 1.0 Agent.qml
+singleton Hotkeys 1.0 Hotkeys.qml

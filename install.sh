@@ -169,7 +169,8 @@ esac
 
 printf '\n'
 ok "Done — run 'start.sh' or log into Hyprland."
-printf '    Island shortcuts: Super+D launcher · Super+C control center · Super+T stats\n'
+printf '    Island shortcuts: Super+Space launcher · Super+C control center · Super+T stats\n'
+printf '    ALL chords are editable live in Settings → Keybinds (Settings window: Super+S).\n'
 printf '    About This Device: Super+I, or Control Center → System\n'
 printf '    Wallpaper picker:  Super+G, or Control Center → System → Wallpaper\n'
 printf '    Plugins menu: Super+O, or Control Center → Plugins → Manage\n'

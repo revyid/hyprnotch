@@ -23,6 +23,8 @@ ShellRoot {
         //  background: touching one property instantiates the singleton
         //  (the k4 warm-up trick), so the weather fetch and the
         //  NetworkManager/BlueZ connections start from the first frame.
+        //  Hotkeys MUST be warmed too — its boot timers apply the chord
+        //  map edited in Settings → Keybinds.
         Config.loaded = true
         void Weather.ready
         void Net.wifiEnabled
@@ -30,6 +32,7 @@ ShellRoot {
         void SysMon.cpuPct
         void Power.profileAvailable
         void Wallpaper.available
+        void Hotkeys.map
         console.log("[HyprNotch] started — config:", Config.filePath)
     }
 
@@ -45,8 +48,9 @@ ShellRoot {
     //  Bind example (note the `ipc` subcommand — without it the bind
     //  fires nothing and the keypress falls through to the terminal):
     //    bind = SUPER, C, exec, quickshell ipc -p ~/.config/quickshell/hyprnotch/shell.qml call notch controlCenter
-    //  start.sh registers every notch bind at runtime via
-    //  `hyprctl keyword`, so these also work with zero config edits.
+    //  services/Hotkeys.qml registers every chord from the map edited in
+    //  Settings → Keybinds; `applyKeys` re-applies it after a manual
+    //  hyprctl reload without relaunching the shell.
     IpcHandler {
         target: "notch"
 
@@ -69,5 +73,6 @@ ShellRoot {
         function podman(): void        { Power.openSettings("podman") }
         function agent(): void         { Power.openSettings("agent") }
         function reloadPlugins(): void { Plugins.reload() }
+        function applyKeys(): void     { Hotkeys.apply() }
     }
 }

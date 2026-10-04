@@ -208,6 +208,296 @@ Window {
         }
     }
 
+    //  ── Keybind capture state (Settings → Keybinds) ─────────────
+    //  Lives on the window root so the inline KeyRow component and the
+    //  page delegates share one capture session: exactly one row
+    //  listens for a chord at a time.
+    property string capturingAction: ""
+    property string capMods: ""
+    property string capKey: ""
+    property string capMsg: ""
+
+    //  One row per island action: folded state shows the current chord,
+    //  capturing state turns the row into a live key catcher. The focus
+    //  Item grabs activeFocus the moment the row enters capture mode and
+    //  decodes events through Hotkeys.modsFromEvent / keyName.
+    component KeyRow: Rectangle {
+        id: keyRow
+        property string action: ""
+        property string title: ""
+        property string sub: ""
+        property var chord: null
+        property string status: ""          // "set" | "busy" | "fail"
+        property bool capturing: false
+        signal startCapture()
+        signal clearChord()
+        signal cancelCapture()
+        signal commitChord(string mods, string key)
+
+        width: parent ? parent.width : 0
+        height: keyRow.capturing ? 98 : 50
+        radius: Theme.radiusSmall
+        color: keyRow.capturing ? Theme.surfaceHi : Theme.surface
+        Behavior on height { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
+
+        Item {
+            id: catcher
+            anchors.fill: parent
+            focus: keyRow.capturing
+            Keys.onPressed: (e) => {
+                e.accepted = true
+                if (!keyRow.capturing)
+                    return
+                if (e.key === Qt.Key_Escape) {
+                    keyRow.cancelCapture()
+                    return
+                }
+                const mods = Hotkeys.modsFromEvent(e)
+                if (e.key === Qt.Key_Shift || e.key === Qt.Key_Control
+                    || e.key === Qt.Key_Alt || e.key === Qt.Key_Meta) {
+                    settingsWindow.capMods = mods.join(" ")
+                    settingsWindow.capKey = ""
+                    settingsWindow.capMsg = mods.length > 0
+                        ? (mods.join(" + ") + " + …  —  now the main key")
+                        : "hold a modifier — Super / Ctrl / Alt / Shift"
+                    return
+                }
+                if (mods.length === 0) {
+                    settingsWindow.capMods = ""
+                    settingsWindow.capKey = ""
+                    settingsWindow.capMsg = "add a modifier — Super / Ctrl / Alt / Shift"
+                    return
+                }
+                const k = Hotkeys.keyName(e)
+                if (k.length === 0) {
+                    settingsWindow.capKey = ""
+                    settingsWindow.capMsg = "that key is not supported — try another"
+                    return
+                }
+                settingsWindow.capMods = mods.join(" ")
+                settingsWindow.capKey = k
+                settingsWindow.capMsg = ""
+            }
+        }
+        onCapturingChanged: {
+            if (capturing)
+                catcher.forceActiveFocus()
+        }
+
+        //  ── folded layout ─────────────────────────────────────────
+        Row {
+            visible: !keyRow.capturing
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: 12
+            spacing: 10
+
+            Column {
+                spacing: 1
+                Text {
+                    text: keyRow.title
+                    color: Theme.ink
+                    font.family: Theme.uiFont
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    text: keyRow.sub
+                    color: Theme.dim
+                    font.family: Theme.uiFont
+                    font.pixelSize: 10
+                }
+            }
+        }
+
+        Row {
+            visible: !keyRow.capturing
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            anchors.rightMargin: 12
+            spacing: 8
+
+            Glyph {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: keyRow.status === "busy"
+                size: 11
+                colorVal: Theme.yellow
+                glyph: Icons.warning
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: keyRow.status === "busy"
+                text: "taken by another program"
+                color: Theme.yellow
+                font.family: Theme.uiFont
+                font.pixelSize: 9
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: keyRow.status === "fail"
+                text: "apply failed"
+                color: Theme.red
+                font.family: Theme.uiFont
+                font.pixelSize: 9
+            }
+
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: chipLabel.width + 20
+                height: 26
+                radius: 13
+                color: keyRow.chord ? Theme.track : "transparent"
+                border.width: keyRow.chord ? 0 : 1
+                border.color: Theme.track
+                Text {
+                    id: chipLabel
+                    anchors.centerIn: parent
+                    text: keyRow.chord ? Hotkeys.chordLabel(keyRow.chord) : "unbound"
+                    color: keyRow.chord ? Theme.ink : Theme.dim
+                    font.family: Theme.uiFont
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                }
+            }
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 44; height: 26; radius: 6
+                color: keyEditArea.containsMouse ? Theme.surfaceHi : Theme.accent
+                Text {
+                    anchors.centerIn: parent
+                    text: "Edit"
+                    color: "#ffffff"
+                    font.family: Theme.uiFont
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                }
+                MouseArea {
+                    id: keyEditArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: keyRow.startCapture()
+                }
+            }
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: keyRow.chord !== null
+                width: 26; height: 26; radius: 6
+                color: keyClearArea.containsMouse ? "#5c1a16" : Theme.track
+                Text {
+                    anchors.centerIn: parent
+                    text: "×"
+                    color: keyRow.chord ? Theme.muted : "transparent"
+                    font.family: Theme.uiFont
+                    font.pixelSize: 12
+                }
+                MouseArea {
+                    id: keyClearArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: keyRow.clearChord()
+                }
+            }
+        }
+
+        //  ── capturing layout ──────────────────────────────────────
+        Column {
+            visible: keyRow.capturing
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 7
+
+            Row {
+                spacing: 8
+                Text {
+                    text: "Press the new chord for " + keyRow.title
+                    color: Theme.ink
+                    font.family: Theme.uiFont
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    text: settingsWindow.capMsg
+                    color: Theme.accent
+                    font.family: Theme.uiFont
+                    font.pixelSize: 10
+                }
+            }
+
+            Row {
+                spacing: 8
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: previewLabel.width + 20
+                    height: 26
+                    radius: 13
+                    color: Theme.withAlpha(Theme.accent, 0.16)
+                    Text {
+                        id: previewLabel
+                        anchors.centerIn: parent
+                        text: settingsWindow.capKey.length > 0
+                            ? (settingsWindow.capMods + " + " + settingsWindow.capKey)
+                            : (settingsWindow.capMods.length > 0
+                                ? settingsWindow.capMods + " + …"
+                                : "waiting…")
+                        color: Theme.ink
+                        font.family: Theme.uiFont
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+                }
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: settingsWindow.capKey.length > 0
+                    width: 54; height: 26; radius: 6
+                    color: keySaveArea.containsMouse ? Theme.surfaceHi : Theme.accent
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Save"
+                        color: "#ffffff"
+                        font.family: Theme.uiFont
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+                    MouseArea {
+                        id: keySaveArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: keyRow.commitChord(settingsWindow.capMods, settingsWindow.capKey)
+                    }
+                }
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 54; height: 26; radius: 6
+                    color: keyCancelArea.containsMouse ? Theme.surfaceHi : Theme.track
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Cancel"
+                        color: Theme.ink
+                        font.family: Theme.uiFont
+                        font.pixelSize: 10
+                    }
+                    MouseArea {
+                        id: keyCancelArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: keyRow.cancelCapture()
+                    }
+                }
+            }
+
+            Text {
+                text: "Esc cancels · needs at least one modifier · chords used by another action are rejected"
+                color: Theme.dim
+                font.family: Theme.uiFont
+                font.pixelSize: 9
+            }
+        }
+    }
+
     //  ══════════════════════════════════════════════════════════════
     //  Layout: sidebar + page
     //  ══════════════════════════════════════════════════════════════
@@ -217,6 +507,7 @@ Window {
         { key: "island",     label: "Island",         glyph: Icons.desktop },
         { key: "control",    label: "Control Center", glyph: Icons.chart },
         { key: "actions",    label: "Quick Actions",  glyph: Icons.bolt },
+        { key: "keys",       label: "Keybinds",       glyph: Icons.keyboard },
         { key: "dock",       label: "Dock",           glyph: Icons.window },
         { key: "notifs",     label: "Notifications",  glyph: Icons.bell },
         { key: "calendar",   label: "Calendar",       glyph: Icons.calendar },
@@ -344,6 +635,7 @@ Window {
                         case "island":     return islandPage
                         case "control":    return controlPage
                         case "actions":    return actionsPage
+                        case "keys":       return keybindsPage
                         case "dock":       return dockPage
                         case "notifs":     return notifsPage
                         case "calendar":   return calendarPage
@@ -748,6 +1040,140 @@ Window {
                     id: addAction; anchors.fill: parent; hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: settingsWindow.addQuickAction()
+                }
+            }
+        }
+    }
+
+    //  ── Keybinds — every island chord, editable live ──────────────
+    Component {
+        id: keybindsPage
+
+        Column {
+            width: parent ? parent.width : 0
+            spacing: 8
+
+            SectionLabel { text: "ISLAND ACTIONS" }
+
+            Text {
+                text: "Click Edit and press the new combination. Chords apply the moment you save; the old bind is removed automatically and your own non-Notch chords are never touched."
+                color: Theme.muted
+                font.family: Theme.uiFont
+                font.pixelSize: 10
+                wrapMode: Text.WordWrap
+                width: parent.width
+                bottomPadding: 4
+            }
+
+            Repeater {
+                model: Hotkeys.actions
+
+                delegate: KeyRow {
+                    required property var modelData
+                    readonly property var meta: Hotkeys.labels[modelData.action]
+                        ? Hotkeys.labels[modelData.action] : { title: modelData.action, sub: "" }
+
+                    action: modelData.action
+                    title: meta.title
+                    sub: meta.sub
+                    chord: Hotkeys.map[modelData.action] || null
+                    status: (Hotkeys.applyStatus && Hotkeys.applyStatus[modelData.action])
+                        ? Hotkeys.applyStatus[modelData.action] : ""
+                    capturing: settingsWindow.capturingAction === modelData.action
+
+                    onStartCapture: {
+                        settingsWindow.capturingAction = modelData.action
+                        settingsWindow.capMods = ""
+                        settingsWindow.capKey = ""
+                        settingsWindow.capMsg = "press a combination  —  Esc cancels"
+                    }
+                    onClearChord: Hotkeys.clearBinding(modelData.action)
+                    onCancelCapture: settingsWindow.capturingAction = ""
+                    onCommitChord: (mods, key) => {
+                        const res = Hotkeys.setBinding(modelData.action, mods, key)
+                        if (res.ok) {
+                            settingsWindow.capturingAction = ""
+                        } else {
+                            const other = (Hotkeys.labels[res.conflict]
+                                && Hotkeys.labels[res.conflict].title)
+                                ? Hotkeys.labels[res.conflict].title : res.conflict
+                            settingsWindow.capMsg = "already used by " + other
+                        }
+                    }
+                }
+            }
+
+            SectionLabel { text: "STATUS"; topPadding: 10 }
+
+            Rectangle {
+                width: parent.width
+                height: 46
+                radius: Theme.radiusSmall
+                color: Theme.surface
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    width: parent.width - 190
+                    text: Hotkeys.lastSummary.length > 0 ? Hotkeys.lastSummary : "not applied yet"
+                    color: Hotkeys.hyprctlMissing ? Theme.yellow : Theme.muted
+                    font.family: Theme.uiFont
+                    font.pixelSize: 10
+                    elide: Text.ElideMiddle
+                }
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 12
+                    width: 110; height: 28; radius: 6
+                    color: reapplyArea.containsMouse ? Theme.surfaceHi : Theme.accent
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Re-apply"
+                        color: "#ffffff"
+                        font.family: Theme.uiFont
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+                    MouseArea {
+                        id: reapplyArea; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Hotkeys.apply()
+                    }
+                }
+            }
+
+            SectionLabel { text: "NOTES"; topPadding: 10 }
+
+            Text {
+                text: "· k4 Lua fork — every edit rewrites ~/.config/hypr/config/hyprnotch.lua, so bindings survive hyprctl reload.\n" +
+                      "· Classic config — binds are runtime-only: after a manual hyprctl reload press Re-apply, or run\n" +
+                      "   quickshell ipc -p ~/.config/quickshell/hyprnotch/shell.qml call notch applyKeys\n" +
+                      "· A chord held by another program shows the warning badge and is skipped — HyprNotch never hijacks your keys."
+                color: Theme.muted
+                font.family: Theme.uiFont
+                font.pixelSize: 10
+                wrapMode: Text.WordWrap
+                width: parent.width
+            }
+
+            Rectangle {
+                width: 220; height: 34
+                radius: Theme.radiusSmall
+                color: resetKeysArea.containsMouse ? "#5c1a16" : Theme.withAlpha(Theme.red, 0.16)
+                Text {
+                    anchors.centerIn: parent
+                    text: "Reset to factory chords"
+                    color: Theme.red
+                    font.family: Theme.uiFont
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                MouseArea {
+                    id: resetKeysArea; anchors.fill: parent; hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Hotkeys.resetToDefaults()
                 }
             }
         }

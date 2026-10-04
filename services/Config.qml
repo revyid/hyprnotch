@@ -107,6 +107,12 @@ Singleton {
         launcher: {
             enabled: true
         },
+        //  Chord map is managed by services/Hotkeys.qml — defaults live
+        //  there; saved edits land under keybinds.map and win. An entry
+        //  { mods:"", key:"" } means the user deliberately unbound it.
+        keybinds: {
+            map: {}
+        },
         tasks: {
             enabled: true
         },
