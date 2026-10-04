@@ -24,7 +24,7 @@ Singleton {
         general: {
             accent: "#0a84ff",
             animations: true,
-            cfgVersion: 2
+            cfgVersion: 3
         },
         island: {
             enabled: true,
@@ -44,9 +44,9 @@ Singleton {
             enabled: true,
             width: 360,
             tileColumns: 2,
-            sections: ["toggles", "weather", "sliders", "media", "quickActions", "plugins", "tasks"],
+            sections: ["toggles", "system", "weather", "sliders", "media", "quickActions", "plugins", "tasks"],
             sectionEnabled: {
-                toggles: true, weather: true, sliders: true, media: true,
+                toggles: true, system: true, weather: true, sliders: true, media: true,
                 quickActions: true, plugins: true, tasks: true
             }
         },
@@ -206,19 +206,29 @@ Singleton {
                 console.warn("[Config] corrupt config.json, using defaults:", e)
             }
         }
-        //  One-shot migration (cfgVersion < 2): older saved configs froze
-        //  stale dock/peek flags, which could leave the dock invisible and
-        //  the hover peek dead. Restore the intended defaults once, and
-        //  make sure the plugins section exists in the control center.
+        //  One-shot migrations.
+        //  v2: older saved configs froze stale dock/peek flags, which could
+        //      leave the dock invisible and the hover peek dead. Restore the
+        //      intended defaults once, and make sure the plugins section
+        //      exists in the control center.
+        //  v3: the System section (About This Device / Monitor / Wallpaper
+        //      entries) did not exist yet — inject it after the toggles.
         const ver = (disk && disk.general && disk.general.cfgVersion) || 1
         if (ver < 2) {
-            data.general.cfgVersion = 2
             data.dock.enabled = true
             data.dock.autoHide = false
             data.island.peekEnabled = true
             if (data.controlCenter.sections.indexOf("plugins") < 0)
                 data.controlCenter.sections.push("plugins")
         }
+        if (ver < 3) {
+            const at = data.controlCenter.sections.indexOf("toggles")
+            if (at >= 0)
+                data.controlCenter.sections.splice(at + 1, 0, "system")
+            else
+                data.controlCenter.sections.unshift("system")
+        }
+        data.general.cfgVersion = 3
         loaded = true
         Theme.accent = data.general.accent || "#0a84ff"
     }

@@ -30,8 +30,7 @@ v8 — arrow-function bodies must be an expression or a {block}:
 """
 import os, re, sys
 
-ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1
-                       else "/home/z/my-project/hyprnotch")
+ROOT = (sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 REQUIRED_MODULE = {
     "Singleton": "Quickshell", "PanelWindow": "Quickshell",
@@ -771,12 +770,25 @@ def main():
                     errs.append(f'{path}:{nxt[2]} arrow body cannot be a '
                                 f'statement ("=> {nxt[1]}") — use "=> {{ ... }}"')
 
+        # ---- v9: duplicate signal handlers on one object -----------------
+        #  (Catches: two `onVisibleChanged:` blocks on the same Window —
+        #   the engine rejects the second assignment and the whole file
+        #   fails to load. Happens when handlers get added in two places.)
+        for obj in scan_objects(info["toks"]):
+            seen_h = {}
+            for h, ln in obj["onx"]:
+                if h in seen_h:
+                    errs.append(f'{path}:{ln} duplicate signal handler "on{h}" '
+                                f'in {obj["type"]} (first at line {seen_h[h]})')
+                else:
+                    seen_h[h] = ln
+
         for e in errs:
             print("FAIL", e); failures += 1
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v8)")
+    print(f"Checked {len(files)} QML files (v9)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

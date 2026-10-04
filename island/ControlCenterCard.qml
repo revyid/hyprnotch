@@ -201,6 +201,7 @@ Item {
                     visible: isOn && hasData
                     sourceComponent: !isOn || !hasData ? null
                         : modelData === "toggles" ? togglesComp
+                        : modelData === "system" ? systemSectionComp
                         : modelData === "weather" ? weatherComp
                         : modelData === "sliders" ? slidersComp
                         : modelData === "media" ? mediaComp
@@ -208,6 +209,104 @@ Item {
                         : modelData === "plugins" ? pluginsSectionComp
                         : modelData === "tasks" ? tasksComp
                         : null
+                }
+            }
+        }
+    }
+
+    //  ── System: the discoverable doors to the machine pages ───────
+    //  The island hosts an About This Device card, a live monitor and a
+    //  wallpaper picker — but a popup nobody can find is dead weight.
+    //  Three plain rows, macOS System Settings style, one tap each.
+    Component {
+        id: systemSectionComp
+
+        Rectangle {
+            width: parent ? parent.width : 0
+            height: 3 * 38 + 12
+            radius: Theme.radiusTile
+            color: Theme.surfaceHi
+
+            Column {
+                x: 10; y: 6
+                width: parent.width - 20
+                spacing: 0
+
+                Repeater {
+                    model: [
+                        { key: "about",     glyph: Icons.apple,  label: "About This Device",
+                            sub: SysMon.osName.length > 0 ? SysMon.osName : "Hyprland · HyprNotch" },
+                        { key: "stats",     glyph: Icons.chart,  label: "System Monitor",
+                            sub: "CPU " + SysMon.cpuPct + "% · RAM " + SysMon.memPct + "%" },
+                        { key: "wallpaper", glyph: Icons.image,  label: "Wallpaper",
+                            sub: Wallpaper.available ? (Wallpaper.current.length > 0 ? Wallpaper.fileName(Wallpaper.current) : "Pick an image") : "swww not found" }
+                    ]
+
+                    delegate: Rectangle {
+                        id: sysRow
+                        required property var modelData
+                        width: parent.width
+                        height: 38
+                        radius: 8
+                        color: sysArea.containsMouse ? Theme.track : "transparent"
+                        scale: sysArea.pressed ? 0.98 : 1
+                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                        Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: 8
+                            spacing: 10
+
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 24; height: 24; radius: 7
+                                color: Theme.withAlpha(Theme.accent, 0.18)
+                                Glyph {
+                                    anchors.centerIn: parent
+                                    size: 11
+                                    colorVal: Theme.accent
+                                    glyph: sysRow.modelData.glyph
+                                }
+                            }
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 0
+                                Text {
+                                    text: sysRow.modelData.label
+                                    color: Theme.ink
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: 11
+                                    font.weight: Font.DemiBold
+                                }
+                                Text {
+                                    text: sysRow.modelData.sub
+                                    color: Theme.muted
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: 9
+                                }
+                            }
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.right: parent.right
+                            anchors.rightMargin: 8
+                            text: "›"
+                            color: Theme.dim
+                            font.family: Theme.uiFont
+                            font.pixelSize: 14
+                        }
+
+                        MouseArea {
+                            id: sysArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: UiState.openPopup(sysRow.modelData.key)
+                        }
+                    }
                 }
             }
         }

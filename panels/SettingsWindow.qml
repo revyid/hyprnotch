@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import "../core"
 import "../services"
+import "../island"
 
 //  HyprNotch Settings — the customization hub.
 //  Every widget, popup section, quick action and dock pin is edited
@@ -17,6 +18,7 @@ Window {
         if (visible) {
             Config.save()
             Podman.refresh()
+            aboutProbe.running = true      //  cold identity read for About
         }
     }
 
@@ -211,16 +213,18 @@ Window {
     //  ══════════════════════════════════════════════════════════════
 
     readonly property var navItems: [
-        { key: "general",  label: "General",        glyph: Icons.sliders },
-        { key: "island",   label: "Island",         glyph: Icons.desktop },
-        { key: "control",  label: "Control Center", glyph: Icons.chart },
-        { key: "actions",  label: "Quick Actions",  glyph: Icons.bolt },
-        { key: "dock",     label: "Dock",           glyph: Icons.window },
-        { key: "notifs",   label: "Notifications",  glyph: Icons.bell },
-        { key: "calendar", label: "Calendar",       glyph: Icons.calendar },
-        { key: "podman",   label: "Containers",     glyph: Icons.cubes },
-        { key: "agent",    label: "AI Agent",       glyph: Icons.robot },
-        { key: "about",    label: "About",          glyph: Icons.circleCheck }
+        { key: "general",    label: "General",        glyph: Icons.sliders },
+        { key: "island",     label: "Island",         glyph: Icons.desktop },
+        { key: "control",    label: "Control Center", glyph: Icons.chart },
+        { key: "actions",    label: "Quick Actions",  glyph: Icons.bolt },
+        { key: "dock",       label: "Dock",           glyph: Icons.window },
+        { key: "notifs",     label: "Notifications",  glyph: Icons.bell },
+        { key: "calendar",   label: "Calendar",       glyph: Icons.calendar },
+        { key: "wallpapers", label: "Wallpapers",     glyph: Icons.image },
+        { key: "plugins",    label: "Plugins",        glyph: Icons.plug },
+        { key: "podman",     label: "Containers",     glyph: Icons.cubes },
+        { key: "agent",      label: "AI Agent",       glyph: Icons.robot },
+        { key: "about",      label: "About",          glyph: Icons.circleCheck }
     ]
 
     Row {
@@ -337,16 +341,18 @@ Window {
                     width: parent ? parent.width - 48 : 0
                     sourceComponent: {
                         switch (UiState.settingsPage) {
-                        case "island":   return islandPage
-                        case "control":  return controlPage
-                        case "actions":  return actionsPage
-                        case "dock":     return dockPage
-                        case "notifs":   return notifsPage
-                        case "calendar": return calendarPage
-                        case "podman":   return podmanPage
-                        case "agent":    return agentPage
-                        case "about":    return aboutPage
-                        default:         return generalPage
+                        case "island":     return islandPage
+                        case "control":    return controlPage
+                        case "actions":    return actionsPage
+                        case "dock":       return dockPage
+                        case "notifs":     return notifsPage
+                        case "calendar":   return calendarPage
+                        case "wallpapers": return wallpapersPage
+                        case "plugins":    return pluginsPage
+                        case "podman":     return podmanPage
+                        case "agent":      return agentPage
+                        case "about":      return aboutPage
+                        default:           return generalPage
                         }
                     }
                 }
@@ -526,9 +532,10 @@ Window {
             SectionLabel { text: "SECTIONS — toggle and reorder (applies live)"; topPadding: 10 }
 
             readonly property var sectionLabels: ({
-                toggles: "Connection toggles", sliders: "Sliders (brightness · volume · mic)",
+                toggles: "Connection toggles", system: "System (About · Monitor · Wallpaper)",
+                sliders: "Sliders (brightness · volume · mic)",
                 media: "Media player", stats: "System stats", quickActions: "Quick actions",
-                tasks: "Tasks"
+                weather: "Weather", plugins: "Plugins row", tasks: "Tasks"
             })
 
             Repeater {
@@ -597,9 +604,10 @@ Window {
 
     function controlPageSectionLabels(key) {
         const map = {
-            toggles: "Connection toggles", sliders: "Sliders (brightness · volume · mic)",
+            toggles: "Connection toggles", system: "System (About · Monitor · Wallpaper)",
+            sliders: "Sliders (brightness · volume · mic)",
             media: "Media player", stats: "System stats", quickActions: "Quick actions",
-            tasks: "Tasks"
+            weather: "Weather", plugins: "Plugins row", tasks: "Tasks"
         }
         return map[key] || key
     }
@@ -1272,62 +1280,416 @@ Window {
         }
     }
 
-    //  ── About ─────────────────────────────────────────────────────
+    //  ── Wallpapers — the swww picker, full-window edition ─────────
     Component {
-        id: aboutPage
+        id: wallpapersPage
 
         Column {
             width: parent ? parent.width : 0
             spacing: 8
 
-            SectionLabel { text: "SYSTEM" }
+            SectionLabel { text: "WALLPAPER — swww, with live transitions" }
 
+            //  The island card, reused whole. It lays itself out from
+            //  prefWidth; 720 gives the thumbnail grid four columns.
             Rectangle {
                 width: parent.width
-                height: aboutGrid.implicitHeight + 24
+                height: islandWp.implicitHeight + 24
                 radius: Theme.radiusSmall
                 color: Theme.surface
 
-                Grid {
-                    id: aboutGrid
+                WallpaperCard {
+                    id: islandWp
                     x: 12; y: 12
-                    width: parent ? parent.width : 0 - 24
-                    columns: 1
-                    rowSpacing: 6
+                    width: parent.width - 24
+                    prefWidth: parent.width - 24
+                }
+            }
 
-                    Repeater {
-                        model: [
-                            { k: "Shell",        v: "HyprNotch 1.0" },
-                            { k: "Framework",    v: "Quickshell (QML)" },
-                            { k: "Compositor",   v: "Hyprland" },
-                            { k: "User",         v: Quickshell.env("USER") || "—" },
-                            { k: "Host",         v: Quickshell.env("HOSTNAME") || "—" },
-                            { k: "Kernel",       v: settingsWindow.kernelVersion },
-                            { k: "Uptime",       v: SysMon.uptime },
-                            { k: "CPU",          v: SysMon.cpuPct + "%" },
-                            { k: "Memory",       v: SysMon.formatGb(SysMon.memUsedGb) + " / " + SysMon.formatGb(SysMon.memTotalGb) }
-                        ]
+            Row {
+                spacing: 8
 
-                        delegate: Row {
-                            required property var modelData
-                            width: aboutGrid.width
+                Rectangle {
+                    width: 210; height: 34
+                    radius: Theme.radiusSmall
+                    color: wpOpenArea.containsMouse ? Theme.surfaceHi : Theme.track
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Open picker in the island"
+                        color: Theme.ink
+                        font.family: Theme.uiFont
+                        font.pixelSize: 11
+                    }
+                    MouseArea {
+                        id: wpOpenArea; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            settingsWindow.visible = false
+                            UiState.openPopup("wallpaper")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    //  ── Plugins — the k4 manager: rows that unfold ─────────────────
+    //  Closed, a row says the minimum: icon, name, where it came from
+    //  and whether it is on. Unfolded (click the row, not the toggle)
+    //  it says the rest: full path, the width it asks the island for,
+    //  and buttons to open it live or rescan the folder.
+    Component {
+        id: pluginsPage
+
+        Column {
+            width: parent ? parent.width : 0
+            spacing: 8
+
+            SectionLabel { text: "PLUGINS — drop .qml files into ~/.config/quickshell/hyprnotch/plugins/" }
+
+            Repeater {
+                model: pluginsPageRows()
+
+                delegate: Rectangle {
+                    id: pluginRow
+                    required property var modelData
+                    required property int index
+                    width: parent ? parent.width : 0
+                    height: pluginBody.implicitHeight + 18
+                    radius: Theme.radiusSmall
+                    color: pluginRow.opened ? Theme.surfaceHi
+                        : (pluginHover.containsMouse ? Theme.surfaceHi : Theme.surface)
+                    Behavior on color { ColorAnimation { duration: 140 } }
+
+                    property bool opened: false
+                    readonly property bool isEnabled: !Plugins.isDisabled(pluginRow.modelData.file)
+
+                    Column {
+                        id: pluginBody
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        anchors.topMargin: 9
+                        spacing: 10
+
+                        //  ── what is always visible ──
+                        Row {
+                            width: parent.width
+                            height: 34
+                            spacing: 11
+
+                            Glyph {
+                                anchors.verticalCenter: parent.verticalCenter
+                                size: 13
+                                colorVal: Theme.dim
+                                glyph: Icons.chevronRight
+                                rotation: pluginRow.opened ? 90 : 0
+                                Behavior on rotation { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                            }
+
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 30; height: 30; radius: 8
+                                color: pluginRow.isEnabled ? Theme.withAlpha(Theme.accent, 0.16) : Theme.track
+                                Glyph {
+                                    anchors.centerIn: parent
+                                    size: 13
+                                    colorVal: pluginRow.isEnabled ? Theme.ink : Theme.dim
+                                    glyph: pluginRow.modelData.icon
+                                }
+                            }
+
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - 120
+                                spacing: 1
+
+                                Text {
+                                    text: pluginRow.modelData.name
+                                    color: pluginRow.isEnabled ? Theme.ink : Theme.dim
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                    width: parent.width
+                                }
+                                Text {
+                                    visible: !pluginRow.opened
+                                    text: pluginRow.modelData.loaded
+                                        ? pluginRow.modelData.file + " · " + pluginRow.modelData.prefWidth + "px"
+                                        : pluginRow.modelData.file + " · disabled"
+                                    color: Theme.dim
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: 10
+                                    elide: Text.ElideRight
+                                    width: parent.width
+                                }
+                            }
+
+                            //  The switch. Same one the island obeys.
+                            AppToggle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                checked: pluginRow.isEnabled
+                                onToggled: Plugins.setDisabled(pluginRow.modelData.file, pluginRow.isEnabled)
+                            }
+                        }
+
+                        //  ── what unfolds ──
+                        Column {
+                            width: parent.width
+                            visible: pluginRow.opened
                             spacing: 8
 
+                            Rectangle { width: parent.width; height: 1; color: Theme.withAlpha(Theme.ink, 0.06) }
+
                             Text {
-                                width: 96
-                                text: parent.modelData.k
+                                text: pluginRow.modelData.loaded
+                                    ? "Loaded from ~/.config/quickshell/hyprnotch/plugins/" + pluginRow.modelData.file
+                                        + " — asks the island for " + pluginRow.modelData.prefWidth + "px of width."
+                                    : "Not loaded — it was switched off, so the shell never instantiates it. Flip the switch to bring it back."
                                 color: Theme.muted
                                 font.family: Theme.uiFont
                                 font.pixelSize: 11
+                                wrapMode: Text.WordWrap
+                                width: parent.width
                             }
-                            Text {
-                                width: parent.width - 104
-                                text: parent.modelData.v
-                                color: Theme.ink
-                                font.family: Theme.uiFont
-                                font.pixelSize: 11
-                                elide: Text.ElideRight
+
+                            Row {
+                                spacing: 8
+                                visible: pluginRow.modelData.loaded
+
+                                Rectangle {
+                                    width: 150; height: 30; radius: 6
+                                    color: pOpenArea.containsMouse ? Theme.track : Theme.withAlpha(Theme.accent, 0.16)
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Open in the island"
+                                        color: Theme.accent
+                                        font.family: Theme.uiFont
+                                        font.pixelSize: 10
+                                        font.weight: Font.DemiBold
+                                    }
+                                    MouseArea {
+                                        id: pOpenArea; anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            const act = Plugins.active
+                                            for (let i = 0; i < act.length; ++i)
+                                                if (act[i].file === pluginRow.modelData.file) {
+                                                    Plugins.open(i)
+                                                    return
+                                                }
+                                        }
+                                    }
+                                }
+                                Rectangle {
+                                    width: 110; height: 30; radius: 6
+                                    color: pRescanArea.containsMouse ? Theme.track : Theme.withAlpha(Theme.ink, 0.07)
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Rescan folder"
+                                        color: Theme.ink
+                                        font.family: Theme.uiFont
+                                        font.pixelSize: 10
+                                    }
+                                    MouseArea {
+                                        id: pRescanArea; anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: Plugins.reload()
+                                    }
+                                }
                             }
+                        }
+                    }
+
+                    //  The click that unfolds, UNDER the inner controls so
+                    //  the toggle and buttons keep their own clicks (k4 trick).
+                    MouseArea {
+                        id: pluginHover
+                        anchors.fill: parent
+                        z: -1
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: pluginRow.opened = !pluginRow.opened
+                    }
+                }
+            }
+
+            Text {
+                visible: pluginsPageRows().length === 0
+                text: "No plugins yet.\nDrop a .qml file with a `name` property into\n~/.config/quickshell/hyprnotch/plugins/"
+                color: Theme.dim
+                font.family: Theme.uiFont
+                font.pixelSize: 11
+                horizontalAlignment: Text.AlignHCenter
+                topPadding: 20
+            }
+        }
+    }
+
+    function pluginsPageRows() {
+        //  Reads through Config + Plugins so the Repeater model refreshes
+        //  whenever either changes (the delegate index binding re-evaluates
+        //  on revision bumps).
+        const host = Config.get("plugins.disabled", [])
+        void host
+        void Plugins.revision
+        const list = []
+        const seen = {}
+        for (let i = 0; i < Plugins.plugins.length; ++i) {
+            const p = Plugins.plugins[i]
+            seen[p.file] = true
+            list.push({ file: p.file, name: p.name, icon: p.icon,
+                        prefWidth: p.prefWidth, loaded: true })
+        }
+        const dis = Config.get("plugins.disabled", [])
+        for (let j = 0; j < dis.length; ++j)
+            if (!seen[dis[j]])
+                list.push({ file: dis[j], name: dis[j], icon: "\uF023",
+                            prefWidth: 0, loaded: false })
+        return list
+    }
+
+    //  ── About — "About This Mac", island edition ──────────────────
+    Component {
+        id: aboutPage
+
+        Column {
+            width: parent ? parent.width : 0
+            spacing: 14
+
+            //  ── hero ──
+            Row {
+                width: parent.width
+                spacing: 14
+
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 56; height: 56; radius: 28
+                    color: Theme.withAlpha(Theme.accent, 0.16)
+                    Glyph {
+                        anchors.centerIn: parent
+                        size: 24
+                        colorVal: Theme.ink
+                        glyph: Icons.apple
+                    }
+                }
+                Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 2
+                    Text {
+                        text: "HyprNotch"
+                        color: Theme.ink
+                        font.family: Theme.uiFont
+                        font.pixelSize: 18
+                        font.weight: Font.Bold
+                    }
+                    Text {
+                        text: settingsWindow.aboutValue("build") + " · A macOS-style Dynamic Island for Hyprland."
+                        color: Theme.muted
+                        font.family: Theme.uiFont
+                        font.pixelSize: 11
+                    }
+                }
+            }
+
+            //  ── the three groups, two columns ──
+            Row {
+                width: parent.width
+                spacing: 24
+
+                Column {
+                    width: (parent.width - 24) / 2
+                    spacing: 14
+
+                    settingsWindow.AboutGroup {
+                        width: parent.width
+                        title: "Machine"
+                        glyph: Icons.laptop
+                        rows: [
+                            { k: "Name",         v: settingsWindow.aboutValue("host") },
+                            { k: "User",         v: settingsWindow.aboutValue("user") },
+                            { k: "System",       v: settingsWindow.aboutValue("distro") },
+                            { k: "Architecture", v: settingsWindow.aboutValue("arch") },
+                            { k: "Kernel",       v: settingsWindow.aboutValue("kernel") },
+                            { k: "Uptime",       v: SysMon.uptime }
+                        ]
+                    }
+                }
+
+                Column {
+                    width: (parent.width - 24) / 2
+                    spacing: 14
+
+                    settingsWindow.AboutGroup {
+                        width: parent.width
+                        title: "Desktop"
+                        glyph: Icons.desktop
+                        rows: [
+                            { k: "Compositor", v: settingsWindow.aboutValue("hyprland") },
+                            { k: "Session",    v: settingsWindow.aboutValue("session") },
+                            { k: "Shell",      v: settingsWindow.aboutValue("shell") },
+                            { k: "Framework",  v: settingsWindow.aboutValue("quickshell") }
+                        ]
+                    }
+
+                    settingsWindow.AboutGroup {
+                        width: parent.width
+                        title: "The notch"
+                        glyph: Icons.circleCheck
+                        rows: [
+                            { k: "Build",    v: settingsWindow.aboutValue("build") },
+                            { k: "License",  v: "MIT — (c) 2026 revyid" },
+                            { k: "Source",   v: "github.com/revyid/hyprnotch" },
+                            { k: "Config",   v: Config.filePath }
+                        ]
+                    }
+                }
+            }
+
+            //  ── doors into the island pages ──
+            Row {
+                spacing: 8
+
+                Rectangle {
+                    width: 190; height: 34
+                    radius: Theme.radiusSmall
+                    color: aboutMonArea.containsMouse ? Theme.surfaceHi : Theme.track
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Open System Monitor"
+                        color: Theme.ink
+                        font.family: Theme.uiFont
+                        font.pixelSize: 11
+                    }
+                    MouseArea {
+                        id: aboutMonArea; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            settingsWindow.visible = false
+                            UiState.openPopup("stats")
+                        }
+                    }
+                }
+                Rectangle {
+                    width: 190; height: 34
+                    radius: Theme.radiusSmall
+                    color: aboutWpArea.containsMouse ? Theme.surfaceHi : Theme.track
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Wallpaper picker"
+                        color: Theme.ink
+                        font.family: Theme.uiFont
+                        font.pixelSize: 11
+                    }
+                    MouseArea {
+                        id: aboutWpArea; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            settingsWindow.visible = false
+                            UiState.openPopup("wallpaper")
                         }
                     }
                 }
@@ -1356,19 +1718,104 @@ Window {
         }
     }
 
+    //  A group of label/value rows, k4 AcercaDe style: quiet rótulos on
+    //  the left, live values on the right, one hairline above.
+    component AboutGroup: Column {
+        id: aboutGroup
+
+        property string title: ""
+        property string glyph: ""
+        property var rows: []
+
+        width: parent ? parent.width : 0
+        spacing: 6
+
+        Row {
+            spacing: 6
+            Glyph {
+                anchors.verticalCenter: parent.verticalCenter
+                size: 12
+                colorVal: Theme.muted
+                glyph: aboutGroup.glyph
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: aboutGroup.title
+                color: Theme.ink
+                font.family: Theme.uiFont
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+            }
+        }
+
+        Repeater {
+            model: aboutGroup.rows
+
+            delegate: Row {
+                id: aboutRowItem
+                required property var modelData
+                width: parent ? parent.width : 0
+                spacing: 8
+
+                Text {
+                    width: 110
+                    text: aboutRowItem.modelData.k
+                    color: Theme.muted
+                    font.family: Theme.uiFont
+                    font.pixelSize: 11
+                }
+                Text {
+                    width: parent.width - 118
+                    text: aboutRowItem.modelData.v
+                    color: Theme.ink
+                    font.family: Theme.uiFont
+                    font.pixelSize: 11
+                    elide: Text.ElideMiddle
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+        }
+    }
+
+    //  One sh probe answers the whole page in key=value lines (k4's
+    //  cold-read trick): nothing here polls, so About costs nothing.
+    property var aboutInfo: ({})
+
+    function aboutValue(key) {
+        const v = aboutInfo[key]
+        return v !== undefined && String(v).length > 0 ? String(v) : "-"
+    }
+
+    Process {
+        id: aboutProbe
+        command: ["sh", "-c",
+            'echo "host=$(uname -n)"' + "\n" +
+            'echo "user=$(id -un 2>/dev/null)"' + "\n" +
+            '. /etc/os-release 2>/dev/null && echo "distro=$PRETTY_NAME"' + "\n" +
+            'echo "arch=$(uname -m)"' + "\n" +
+            'echo "kernel=$(uname -r)"' + "\n" +
+            'echo "session=${XDG_CURRENT_DESKTOP:-$XDG_SESSION_TYPE}"' + "\n" +
+            'echo "shell=${SHELL:-}"' + "\n" +
+            'command -v hyprctl >/dev/null 2>&1 && echo "hyprland=$(hyprctl version 2>/dev/null | head -n 1)"' + "\n" +
+            'command -v quickshell >/dev/null 2>&1 && echo "quickshell=$(quickshell --version 2>/dev/null | head -n 1)"' + "\n" +
+            'cat "$HOME/.config/quickshell/hyprnotch/VERSION" 2>/dev/null | sed "s/^/build=/"']
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const next = {}
+                const lines = text.split("\n")
+                for (let i = 0; i < lines.length; ++i) {
+                    const eq = lines[i].indexOf("=")
+                    if (eq > 0)
+                        next[lines[i].substring(0, eq)] = lines[i].substring(eq + 1)
+                }
+                settingsWindow.aboutInfo = next
+            }
+        }
+    }
+
     //  ══════════════════════════════════════════════════════════════
     //  Helpers for list editing + small info lookups
     //  ══════════════════════════════════════════════════════════════
-
-    property string kernelVersion: "—"
-
-    Process {
-        command: ["sh", "-c", "uname -r"]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: settingsWindow.kernelVersion = text.trim()
-        }
-    }
 
     function updateQuickAction(index, key, value) {
         const arr = JSON.parse(JSON.stringify(Config.data.quickActions))

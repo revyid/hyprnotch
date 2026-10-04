@@ -42,8 +42,11 @@ ShellRoot {
     SettingsWindow {}
 
     //  ── IPC surface ───────────────────────────────────────────────
-    //  Bind example:
-    //    bind = SUPER, C, exec, quickshell -p ~/.config/quickshell/hyprnotch/shell.qml call notch controlCenter
+    //  Bind example (note the `ipc` subcommand — without it the bind
+    //  fires nothing and the keypress falls through to the terminal):
+    //    bind = SUPER, C, exec, quickshell ipc -p ~/.config/quickshell/hyprnotch/shell.qml call notch controlCenter
+    //  start.sh registers every notch bind at runtime via
+    //  `hyprctl keyword`, so these also work with zero config edits.
     IpcHandler {
         target: "notch"
 

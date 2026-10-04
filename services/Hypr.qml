@@ -60,7 +60,63 @@ Singleton {
     }
 
     function switchTo(id) {
+        //  A previously-learned strategy is used straight away; otherwise
+        //  start with the k4 Lua varargs form and self-heal from there.
+        if (goodStrategy > 1) {
+            switchStrategies(id, goodStrategy)
+            return
+        }
+        //  Strategy 1 (k4 Lua fork): varargs — hl.dispatch("workspace", 2)
         dispatch("workspace " + id)
+        verify.target = id
+        verify.strategy = 1
+        verify.restart()
+    }
+
+    //  Strategy that last PROVED to move the focus (1 = the config-aware
+    //  default). Learned once, reused for every later click.
+    property int goodStrategy: 1
+
+    //  Self-healing switch: after each attempt, check whether the focus
+    //  actually moved. If not, escalate: varargs Lua -> single-quoted Lua
+    //  string -> raw mainline. Whichever wins is remembered, so the next
+    //  click takes the working path immediately (k4 forks differ in how
+    //  hl.dispatch accepts arguments; mainline wants the plain form).
+    function switchStrategies(id, strategy) {
+        if (strategy === 2)
+            Hyprland.dispatch('"workspace ' + id + '"')   // hl.dispatch("workspace 2")
+        else if (strategy === 3)
+            Hyprland.dispatch("workspace " + id)          // raw mainline form
+        else
+            dispatch("workspace " + id)                   // respects hypr.luaDispatch
+        verify.target = id
+        verify.strategy = strategy
+        verify.restart()
+    }
+
+    Timer {
+        id: verify
+        property int target: -1
+        property int strategy: 1
+        interval: 380
+
+        onTriggered: {
+            if (!hypr || target < 0)
+                return
+            if (hypr.focusedWorkspaceId === target) {
+                if (strategy > 1) {
+                    console.info("[Hypr] workspace switch via strategy", strategy)
+                    hypr.goodStrategy = strategy
+                }
+                target = -1
+                return
+            }
+            if (strategy < 3)
+                hypr.switchStrategies(target, strategy + 1)
+            else
+                console.warn("[Hypr] workspace switch to", target,
+                             "failed on all strategies")
+        }
     }
 
     //  Running application classes, deduplicated — the dock uses this to

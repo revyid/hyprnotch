@@ -120,7 +120,19 @@ and launches the shell.
 
 ### Keybinds
 
-Append `sample-hyprland.conf` to your `hyprland.conf`. Highlights:
+Three ways, pick any:
+
+1. **Zero config (default)** — `start.sh` registers every bind at runtime
+   via `hyprctl keyword` on each launch. Keys already bound under Super are
+   left untouched. Binds die on a manual `hyprctl reload`; re-run start.sh.
+2. **Classic config** — append `sample-hyprland.conf` to your
+   `hyprland.conf` (the installer does it for you on request).
+3. **k4 Lua fork** (`~/.config/hypr/hyprland.lua`) — the installer writes
+   `~/.config/hypr/config/hyprnotch.lua` (an `hl.bind` template) and hooks
+   `require("config.hyprnotch")` into your `hyprland.lua`. Revert = delete
+   both. The same trick the k4 installer uses.
+
+Highlights (see `sample-hyprland.conf` for all):
 
 ```conf
 # Tap Super/Win → launcher springs out of the pill
@@ -131,12 +143,13 @@ bind = SUPER, K, exec, $notch calendar        # calendar
 bind = SUPER, W, exec, $notch weather         # weather menu
 bind = SUPER, T, exec, $notch stats           # system stats
 bind = SUPER, G, exec, $notch wallpaper       # wallpaper picker
-bind = SUPER, E, exec, $notch power           # power menu
 bind = SUPER, I, exec, $notch about           # about this machine
+bind = SUPER, O, exec, $notch plugins         # plugin menu
 ```
 
-Every view is also reachable via IPC:
-`quickshell -p ~/.config/quickshell/hyprnotch/shell.qml call notch <name>` —
+Every view is also reachable via IPC (note the `ipc` subcommand — without
+it the command silently does nothing):
+`quickshell ipc -p ~/.config/quickshell/hyprnotch/shell.qml call notch <name>` —
 names: `controlCenter`, `calendar`, `notifications`, `launcher`, `weather`,
 `stats`, `wallpaper`, `power`, `about`, `settings`, `dnd`, `nightLight`,
 `podman`, `agent`, `reloadPlugins`, `closeAll`.

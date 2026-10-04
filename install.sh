@@ -1,7 +1,11 @@
 #!/bin/sh
 #  HyprNotch installer — checks dependencies (REQUIRED vs OPTIONAL),
-#  copies the shell into ~/.config/quickshell/hyprnotch, and can append
-#  the ready-made keybinds to your hyprland.conf. 100% English on purpose.
+#  copies the shell into ~/.config/quickshell/hyprnotch, and wires the
+#  keybinds. Three config shapes are detected, k4-style:
+#    1. Lua fork   (~/.config/hypr/hyprland.lua)   -> config/hyprnotch.lua + require hook
+#    2. Classic    (~/.config/hypr/hyprland.conf)  -> ready-made binds appended
+#    3. Neither                                    -> start.sh registers binds at runtime
+#  100% English on purpose.
 
 set -e
 
@@ -101,7 +105,7 @@ info "Installing to $DEST"
 mkdir -p "$DEST"
 COPY_FAIL=0
 for item in core services island dock panels plugins scripts shell.qml \
-            README.md sample-hyprland.conf LICENSE VERSION start.sh; do
+            README.md sample-hyprland.conf hyprnotch.lua LICENSE VERSION start.sh; do
     [ -e "$HERE/$item" ] || continue
     rm -rf "$DEST/$item"
     if ! cp -r "$HERE/$item" "$DEST/$item"; then
@@ -114,28 +118,57 @@ chmod +x "$DEST/start.sh" "$DEST/scripts/test.sh" 2>/dev/null
 
 ok "Files copied (build $(cat "$DEST/VERSION" 2>/dev/null || echo v1))."
 
-#  ── 4. Keybinds — optional auto-append with the $notch variable ───
+#  ── 4. Keybinds — detect the config shape, k4-style ───────────────
+HYPR_DIR="$HOME/.config/hypr"
+LUA_TARGET="$HYPR_DIR/config/hyprnotch.lua"
+LUA_HOOK='require("config.hyprnotch")'
+
 printf '\n'
-printf "    append the ready-made keybinds (the \$notch variable) to your hyprland.conf? [y/N] "
+printf "    wire up the island keybinds (Super+C, Super+T, ...)? [Y/n] "
 read -r ans || ans=""
 case "$ans" in
-    y|Y)
-        HL="$HOME/.config/hyprland/hyprland.conf"
-        [ -f "$HL" ] || HL="$HOME/.config/hypr/hyprland.conf"
-        if [ -f "$HL" ]; then
-            printf '\n# ── HyprNotch keybinds (added by install.sh) ──\n' >> "$HL"
-            sed "s|@RAIZ@|$DEST|g" "$HERE/sample-hyprland.conf" >> "$HL"
-            ok "Keybinds appended to $HL — review them and reload Hyprland."
-            warn "Re-running install.sh appends them again — dedupe if needed."
+    n|N) info "Skipped. sample-hyprland.conf has every bind; start.sh also registers them at runtime." ;;
+    *)
+        if [ -f "$HYPR_DIR/hyprland.lua" ]; then
+            #  ── Lua fork (k4 / hyprlang-lua): our own Lua module + hook ──
+            mkdir -p "$(dirname "$LUA_TARGET")"
+            if sed "s|@RAIZ@|$DEST|g" "$HERE/hyprnotch.lua" > "$LUA_TARGET"; then
+                ok "Written $LUA_TARGET (Lua fork detected)."
+                if grep -qF "$LUA_HOOK" "$HYPR_DIR/hyprland.lua" 2>/dev/null; then
+                    ok "Hook already present in hyprland.lua."
+                else
+                    printf '\n-- HyprNotch: keybinds and bar startup\n%s\n' "$LUA_HOOK" >> "$HYPR_DIR/hyprland.lua"
+                    ok "Hooked into hyprland.lua (require at the end — your binds win above it)."
+                fi
+                warn "Reload Hyprland to pick it up. Revert = delete the file + the hook line."
+            else
+                warn "could not write $LUA_TARGET — see hyprnotch.lua in the install folder."
+            fi
+        elif [ -f "$HYPR_DIR/hyprland.conf" ] || [ -f "$HOME/.config/hyprland/hyprland.conf" ]; then
+            HL="$HOME/.config/hypr/hyprland.conf"
+            [ -f "$HL" ] || HL="$HOME/.config/hyprland/hyprland.conf"
+            if grep -qF "HyprNotch keybinds" "$HL" 2>/dev/null; then
+                ok "Binds already appended to $HL — nothing to do."
+            else
+                printf '\n# ── HyprNotch keybinds (added by install.sh) ──\n' >> "$HL"
+                sed "s|@RAIZ@|$DEST|g" "$HERE/sample-hyprland.conf" >> "$HL"
+                ok "Keybinds appended to $HL — reload Hyprland to activate."
+            fi
         else
-            warn "hyprland.conf not found — copy sample-hyprland.conf manually."
+            warn "No hyprland.conf / hyprland.lua found in $HYPR_DIR."
+            info "No problem: start.sh registers the binds at RUNTIME via"
+            info "  'hyprctl keyword bind ...' every launch — keys work with"
+            info "  zero config edits, until a manual 'hyprctl reload'."
+            info "To persist them, copy sample-hyprland.conf (classic) or"
+            info "hyprnotch.lua (k4 Lua fork) manually."
         fi
         ;;
-    *) info "Skipped. See sample-hyprland.conf for the \$notch variable and all binds." ;;
 esac
 
 printf '\n'
 ok "Done — run 'start.sh' or log into Hyprland."
-printf '    Island shortcuts: Super = launcher · Super+C control center · Super+T stats\n'
+printf '    Island shortcuts: Super+D launcher · Super+C control center · Super+T stats\n'
+printf '    About This Device: Super+I, or Control Center → System\n'
+printf '    Wallpaper picker:  Super+G, or Control Center → System → Wallpaper\n'
 printf '    Plugins menu: Super+O, or Control Center → Plugins → Manage\n'
 printf '\n'
