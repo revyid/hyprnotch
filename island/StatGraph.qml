@@ -15,6 +15,10 @@ Item {
     property var values: []
     property real maxValue: 100
 
+    //  Repaint whenever the data changes. The handler must live on THIS
+    //  object (the owner of `values`) — a Canvas child has no `values`.
+    onValuesChanged: canvas.requestPaint()
+
     Rectangle {
         anchors.fill: parent
         radius: 12
@@ -98,7 +102,6 @@ Item {
             ctx.fill()
         }
 
-        onValuesChanged: canvas.requestPaint()
         onWidthChanged: canvas.requestPaint()
         onHeightChanged: canvas.requestPaint()
         Component.onCompleted: canvas.requestPaint()

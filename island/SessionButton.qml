@@ -22,6 +22,10 @@ Item {
     //  ── hold-to-confirm machinery ─────────────────────────────────
     property real holdProgress: 0
 
+    //  Handler lives on the OWNER of holdProgress — a Canvas child has
+    //  no holdProgress (v7 rule).
+    onHoldProgressChanged: ringCanvas.requestPaint()
+
     scale: tapArea.pressed ? 0.90 : 1
     Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutBack } }
 
@@ -70,7 +74,6 @@ Item {
                     ctx.strokeStyle = btn.tint.toString()
                     ctx.stroke()
                 }
-                onHoldProgressChanged: ringCanvas.requestPaint()
             }
 
             //  press fill

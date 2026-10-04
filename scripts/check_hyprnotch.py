@@ -19,6 +19,11 @@ v5 — read-only property class:
 v6 — duplicate method names per object (Catches: 'Duplicate method
   name' — e.g. switchTo() defined twice after a merge) and duplicate
   property declarations per object.
+v7 — <Prop>Changed handlers on module-type objects: the target must be
+  a real property of that object's type (or, at the file root, a prop
+  declared in the file).  (Catches: 'Cannot assign to non-existent
+  property "onValuesChanged"' — handler attached to a Canvas child for
+  a property that lives on the file root.)
 """
 import os, re, sys
 
@@ -93,7 +98,8 @@ BASE_PROPS = {
     "MouseArea": I | {"hoverEnabled", "cursorShape", "acceptedButtons", "drag",
                       "pressed", "containsMouse", "mouseX", "mouseY",
                       "propagateComposedEvents", "preventStealing",
-                      "scrollGestureEnabled", "hovered", "containsPress"},
+                      "scrollGestureEnabled", "hovered", "containsPress",
+                      "position"},  # positionChanged signal (no property),
     "Row": I | {"spacing", "add", "move", "populate", "layoutDirection",
                 "padding", "leftPadding", "rightPadding", "topPadding",
                 "bottomPadding"},
@@ -721,12 +727,37 @@ def main():
                 else:
                     seen_pp[pp] = ln
 
+        # ---- v7: <Prop>Changed handlers on module-type objects -------------
+        #  (Catches: @island/StatGraph.qml[101:9]: Cannot assign to
+        #   non-existent property "onValuesChanged" — a Changed handler
+        #   attached to a child object for a property that lives elsewhere,
+        #   typically on the file root.)
+        for obj in scan_objects(info["toks"]):
+            t = obj["type"]
+            if t in SKIP_VALIDATE_TYPES or t not in BASE_PROPS:
+                continue              # local comps already covered (check 6)
+            surface = set(BASE_PROPS[t])
+            surface |= set(n for n, _ in obj.get("props_decl", []))
+            if obj.get("isroot"):
+                surface |= info["props"]   # file root: own declarations too
+            for name, ln in obj["onx"]:
+                if not name.endswith("Changed") or len(name) <= 7:
+                    continue          # onPaint / onClicked — signals, skip
+                target = name[0].lower() + name[1:-7]
+                if target in surface:
+                    continue
+                if (target + "Changed") in QT_OBJECT_SIGNALS.get(t, set()):
+                    continue          # curated signal list (e.g. FileView fileChanged)
+                errs.append(f'{path}:{ln} [{t}] handler "on{name}" does not '
+                            f'match any property of {t} ("{target}" is not a '
+                            f'property here)')
+
         for e in errs:
             print("FAIL", e); failures += 1
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v6)")
+    print(f"Checked {len(files)} QML files (v7)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:
