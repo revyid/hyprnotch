@@ -24,11 +24,14 @@ v7 — <Prop>Changed handlers on module-type objects: the target must be
   declared in the file).  (Catches: 'Cannot assign to non-existent
   property "onValuesChanged"' — handler attached to a Canvas child for
   a property that lives on the file root.)
+v8 — arrow-function bodies must be an expression or a {block}:
+  `=> if (...)` is invalid JS.  (Catches: 'Unexpected token `if' /
+  'Expected token `,`' — onPositionChanged: (m) => if (pressed) f())
 """
 import os, re, sys
 
 ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1
-        else os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                       else "/home/z/my-project/hyprnotch")
 
 REQUIRED_MODULE = {
     "Singleton": "Quickshell", "PanelWindow": "Quickshell",
@@ -752,12 +755,28 @@ def main():
                             f'match any property of {t} ("{target}" is not a '
                             f'property here)')
 
+        # ---- v8: arrow bodies must be expressions or {blocks} -------------
+        #  `x => if (c) f()` is a JS syntax error (statement bodies need
+        #  braces).  (Catches: @island/IslandWindow.qml[568:55]: Unexpected
+        #  token `if')
+        ARROW_BAN = {"if", "for", "while", "switch", "try", "do",
+                     "return", "throw", "const", "let", "var",
+                     "function", "class", "else"}
+        toks = info["toks"]
+        for idx in range(len(toks) - 2):
+            if toks[idx][0] == "p" and toks[idx][1] == "=" \
+               and toks[idx+1][0] == "p" and toks[idx+1][1] == ">":
+                nxt = toks[idx+2]
+                if nxt[0] == "id" and nxt[1] in ARROW_BAN:
+                    errs.append(f'{path}:{nxt[2]} arrow body cannot be a '
+                                f'statement ("=> {nxt[1]}") — use "=> {{ ... }}"')
+
         for e in errs:
             print("FAIL", e); failures += 1
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v7)")
+    print(f"Checked {len(files)} QML files (v8)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

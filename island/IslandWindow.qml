@@ -565,7 +565,9 @@ PanelWindow {
                                     Brightness.setLevel(Math.round(v))
                             }
                             onPressed: (m) => apply(m.x)
-                            onPositionChanged: (m) => if (pressed) apply(m.x)
+                            onPositionChanged: (m) => {
+                                if (pressed) apply(m.x)
+                            }
                         }
                     }
 
