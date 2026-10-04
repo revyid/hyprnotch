@@ -8,6 +8,7 @@ WeatherCard 1.0 WeatherCard.qml
 WallpaperCard 1.0 WallpaperCard.qml
 PowerCard 1.0 PowerCard.qml
 AboutCard 1.0 AboutCard.qml
+PluginsCard 1.0 PluginsCard.qml
 PeekView 1.0 PeekView.qml
 BannersRow 1.0 BannersRow.qml
 StatGraph 1.0 StatGraph.qml

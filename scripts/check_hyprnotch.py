@@ -27,7 +27,7 @@ v7 — <Prop>Changed handlers on module-type objects: the target must be
 """
 import os, re, sys
 
-ROOT = (sys.argv[1] if len(sys.argv) > 1
+ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1
         else os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 REQUIRED_MODULE = {

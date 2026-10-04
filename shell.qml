@@ -57,6 +57,7 @@ ShellRoot {
         function wallpaper(): void     { UiState.togglePopup("wallpaper") }
         function power(): void         { UiState.togglePopup("power") }
         function about(): void         { UiState.togglePopup("about") }
+        function plugins(): void       { UiState.togglePopup("plugins") }
         function settings(): void      { Power.openSettings() }
         function settingsPage(page: string): void { Power.openSettings(page) }
         function dock(): void          { Config.set("dock.enabled", !Config.data.dock.enabled) }

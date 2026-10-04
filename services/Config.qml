@@ -23,7 +23,8 @@ Singleton {
     readonly property var defaults: ({
         general: {
             accent: "#0a84ff",
-            animations: true
+            animations: true,
+            cfgVersion: 2
         },
         island: {
             enabled: true,
@@ -43,10 +44,10 @@ Singleton {
             enabled: true,
             width: 360,
             tileColumns: 2,
-            sections: ["toggles", "weather", "sliders", "media", "quickActions", "tasks"],
+            sections: ["toggles", "weather", "sliders", "media", "quickActions", "plugins", "tasks"],
             sectionEnabled: {
                 toggles: true, weather: true, sliders: true, media: true,
-                quickActions: true, tasks: true
+                quickActions: true, plugins: true, tasks: true
             }
         },
         quickActions: [
@@ -195,17 +196,31 @@ Singleton {
 
     function load() {
         const raw = store.text()
+        let disk = null
         if (raw && raw.length > 0) {
             try {
-                const disk = JSON.parse(raw)
+                disk = JSON.parse(raw)
                 data = deepMerge(JSON.parse(JSON.stringify(defaults)), disk)
             } catch (e) {
                 //  Unreadable config: keep factory defaults, do not crash.
                 console.warn("[Config] corrupt config.json, using defaults:", e)
             }
         }
+        //  One-shot migration (cfgVersion < 2): older saved configs froze
+        //  stale dock/peek flags, which could leave the dock invisible and
+        //  the hover peek dead. Restore the intended defaults once, and
+        //  make sure the plugins section exists in the control center.
+        const ver = (disk && disk.general && disk.general.cfgVersion) || 1
+        if (ver < 2) {
+            data.general.cfgVersion = 2
+            data.dock.enabled = true
+            data.dock.autoHide = false
+            data.island.peekEnabled = true
+            if (data.controlCenter.sections.indexOf("plugins") < 0)
+                data.controlCenter.sections.push("plugins")
+        }
         loaded = true
-        theme.accent = data.general.accent || "#0a84ff"
+        Theme.accent = data.general.accent || "#0a84ff"
     }
 
     function save() {

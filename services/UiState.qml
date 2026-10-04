@@ -17,7 +17,7 @@ Singleton {
     //  none → folded pill; anything else → the island grows to host it.
     readonly property var popups: [
         "none", "controlCenter", "calendar", "notifCenter", "launcher",
-        "weather", "stats", "wallpaper", "power", "about"
+        "weather", "stats", "wallpaper", "power", "about", "plugins"
     ]
 
     property string activePopup: "none"

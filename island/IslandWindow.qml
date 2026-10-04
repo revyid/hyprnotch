@@ -139,7 +139,7 @@ PanelWindow {
         if (expanded)
             return Math.max(pillFullWidth, (viewItem ? viewItem.prefWidth : 380) + Theme.wing * 2)
         if (hudActive)
-            return Math.max(pillFullWidth, 280)
+            return Math.max(pillFullWidth, 320)
         if (peekActive)
             return Math.max(pillFullWidth, peekLoader.item ? peekLoader.item.prefWidth + Theme.wing * 2 : pillFullWidth)
         return pillFullWidth
@@ -148,8 +148,9 @@ PanelWindow {
     readonly property real targetHeight: {
         if (expanded)
             return cfg.pillHeight + Math.max(80, viewItem ? viewItem.implicitHeight : 200)
+        //  HUD lives INSIDE the pill strip (k4): the notch just widens.
         if (hudActive)
-            return cfg.pillHeight + 54
+            return cfg.pillHeight
         if (peekActive)
             return cfg.pillHeight + (peekLoader.item ? peekLoader.item.implicitHeight : 140)
         return cfg.pillHeight
@@ -218,6 +219,11 @@ PanelWindow {
                 id: pillRow
                 anchors.centerIn: parent
                 spacing: 12
+
+                //  The HUD strip takes over the pill content while it
+                //  flashes (k4 swaps in place instead of stacking).
+                opacity: islandWindow.hudActive ? 0 : 1
+                Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
 
                 //  ── Left: clock + date → calendar ────────────────
                 MouseArea {
@@ -497,6 +503,87 @@ PanelWindow {
                 }
             }
 
+            //  ── HUD strip (k4): volume / brightness INSIDE the pill ──
+            //  The pill widens, the clock rows fade out, and a slim
+            //  track replaces them — click or drag to set the level.
+            Item {
+                anchors.fill: parent
+                visible: islandWindow.hudActive
+                opacity: visible ? 1 : 0
+
+                Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 10
+
+                    Glyph {
+                        anchors.verticalCenter: parent.verticalCenter
+                        size: 15
+                        colorVal: Theme.ink
+                        glyph: Audio.hudOpen
+                            ? Icons.volumeIcon(Audio.volume, Audio.muted)
+                            : Icons.sun
+                    }
+
+                    Item {
+                        id: hudTrack
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 170
+                        height: 18
+
+                        readonly property real pct: Audio.hudOpen
+                            ? (Audio.muted ? 0 : Audio.volume / 100)
+                            : Brightness.level / 100
+
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width
+                            height: 6
+                            radius: 3
+                            color: Theme.track
+                        }
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.max(6, hudTrack.pct * hudTrack.width)
+                            height: 6
+                            radius: 3
+                            color: Theme.ink
+
+                            Behavior on width { NumberAnimation { duration: 60 } }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+
+                            function apply(mx) {
+                                const v = Math.max(0, Math.min(1, mx / hudTrack.width)) * 100
+                                if (Audio.hudOpen)
+                                    Audio.setVolume(Math.round(v))
+                                else
+                                    Brightness.setLevel(Math.round(v))
+                            }
+                            onPressed: (m) => apply(m.x)
+                            onPositionChanged: (m) => if (pressed) apply(m.x)
+                        }
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 38
+                        text: Audio.hudOpen
+                            ? (Audio.muted ? "—" : Audio.volume + "%")
+                            : Brightness.level + "%"
+                        color: Theme.muted
+                        font.family: Theme.uiFont
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+            }
+
             //  Hover peek: see islandWindow.peekWanted — the handler
             //  only feeds the binding; the width spring does the rest.
             HoverHandler {
@@ -505,7 +592,7 @@ PanelWindow {
             }
         }
 
-        //  ── Expansion body: hosts peek / hud / the active view ────
+        //  ── Expansion body: hosts peek / the active view ──────────
         //  Clipped so content is revealed as the island grows (k4
         //  reads this as the view unfolding out of the pill).
         Item {
@@ -530,6 +617,7 @@ PanelWindow {
                     : UiState.activePopup === "wallpaper" ? wallpaperComp
                     : UiState.activePopup === "power" ? powerComp
                     : UiState.activePopup === "about" ? aboutComp
+                    : UiState.activePopup === "plugins" ? pluginsComp
                     : ccComp
 
                 opacity: active ? 1 : 0
@@ -550,59 +638,6 @@ PanelWindow {
                 y: active ? 0 : -16
                 Behavior on opacity { NumberAnimation { duration: 220 } }
                 Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-            }
-
-            //  ── HUD row (volume / brightness, inline) ─────────────
-            Item {
-                id: hudRow
-                anchors.fill: parent
-                visible: islandWindow.hudActive
-                opacity: visible ? 1 : 0
-
-                Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
-
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 6
-                    radius: 14
-                    color: Theme.withAlpha(Theme.ink, 0.07)
-                }
-
-                Row {
-                    anchors.centerIn: parent
-                    spacing: 12
-
-                    //  Priority: volume over brightness when both flash
-                    Glyph {
-                        anchors.verticalCenter: parent.verticalCenter
-                        size: 16
-                        colorVal: Theme.ink
-                        glyph: Audio.hudOpen
-                            ? Icons.volumeIcon(Audio.volume, Audio.muted)
-                            : Icons.sun
-                    }
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 38
-                        text: Audio.hudOpen
-                            ? (Audio.muted ? "—" : Audio.volume + "%")
-                            : Brightness.level + "%"
-                        color: Theme.ink
-                        font.family: Theme.uiFont
-                        font.pixelSize: 13
-                        font.weight: Font.DemiBold
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    AppSlider {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 180
-                        value: Audio.hudOpen ? Audio.volume : Brightness.level
-                        onValueEdited: (v) => {
-                            if (Audio.hudOpen) Audio.setVolume(Math.round(v))
-                            else Brightness.setLevel(Math.round(v))
-                        }
-                    }
-                }
             }
 
             //  ── Peek glance (hover) ───────────────────────────────
@@ -687,5 +722,10 @@ PanelWindow {
     Component {
         id: aboutComp
         AboutCard {}
+    }
+
+    Component {
+        id: pluginsComp
+        PluginsCard {}
     }
 }

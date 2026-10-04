@@ -205,6 +205,7 @@ Item {
                         : modelData === "sliders" ? slidersComp
                         : modelData === "media" ? mediaComp
                         : modelData === "quickActions" ? actionsComp
+                        : modelData === "plugins" ? pluginsSectionComp
                         : modelData === "tasks" ? tasksComp
                         : null
                 }
@@ -213,6 +214,69 @@ Item {
     }
 
     //  ── Connectivity tiles: macOS 2x2, Wi-Fi / BT open details ────
+
+    //  ── Plugins: count + manage entry (opens the manager view) ────
+    Component {
+        id: pluginsSectionComp
+
+        Rectangle {
+            width: parent ? parent.width : 0
+            height: 46
+            radius: Theme.radiusTile
+            color: Theme.surfaceHi
+
+            scale: pluginsArea.pressed ? 0.98 : 1
+            Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.left
+                anchors.leftMargin: 12
+                spacing: 10
+
+                Glyph {
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: 15
+                    colorVal: Theme.accent
+                    glyph: Icons.plug
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Plugins"
+                    color: Theme.ink
+                    font.family: Theme.uiFont
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Plugins.active.length === 1
+                        ? "1 active" : Plugins.active.length + " active"
+                    color: Theme.muted
+                    font.family: Theme.uiFont
+                    font.pixelSize: 10
+                }
+            }
+
+            Text {
+                anchors.right: parent.right
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Manage ›"
+                color: Theme.muted
+                font.family: Theme.uiFont
+                font.pixelSize: 11
+            }
+
+            MouseArea {
+                id: pluginsArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: UiState.openPopup("plugins")
+            }
+        }
+    }
 
     Component {
         id: togglesComp

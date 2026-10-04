@@ -268,6 +268,7 @@ Item {
 
                 delegate: Rectangle {
                     required property var modelData
+                    required property int index
                     width: (parent.width - 36) / 7
                     height: 78
                     radius: 10

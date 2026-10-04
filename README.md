@@ -146,7 +146,19 @@ names: `controlCenter`, `calendar`, `notifications`, `launcher`, `weather`,
 Everything persists at `~/.config/hyprnotch/config.json` and applies live.
 Notable keys: `island.maxVisibleWorkspaces`, `island.peekEnabled`,
 `wallpaper.dir/transition/duration`, `dock.pinned` (desktop ids or legacy
-glyph pins), `plugins.disabled`, `quickActions`, `controlCenter.sections`.
+glyph pins), `plugins.disabled`, `quickActions`, `controlCenter.sections`,
+`hypr.luaDispatch` (default `true` — quote dispatch args for the k4 Lua
+fork; set to `false` on mainline Hyprland).
+
+### Where things live
+
+- **System stats** — `Super+T`, the CPU/RAM row in the hover peek, the
+  "System Stats" quick action, or the battery chip → power menu → About.
+- **Plugins menu** — `Super+O`, or Control Center → Plugins → Manage.
+  Toggle, open, and reload plugins; drop new `.qml` files into
+  `~/.config/quickshell/hyprnotch/plugins/` and press refresh.
+- **Keybinds** — `sample-hyprland.conf` defines the `$notch` variable so
+  every island view is bindable; `install.sh` can append them for you.
 
 ## Development & testing
 

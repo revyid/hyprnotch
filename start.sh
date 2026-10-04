@@ -31,6 +31,12 @@ if pgrep -x mako >/dev/null 2>&1 || pgrep -x dunst >/dev/null 2>&1 \
     echo "[HyprNotch] stopped other notification daemons (mako/dunst/...) — HyprNotch renders banners in the pill now"
 fi
 
+#  ── State directories ────────────────────────────────────────────
+#  Config store and task list live outside the config folder; make
+#  sure both exist so FileView never warns on a fresh install.
+mkdir -p "$HOME/.config/hyprnotch" "$HOME/.local/state/hyprnotch"
+[ -f "$HOME/.local/state/hyprnotch/tasks.json" ] || printf '[]' > "$HOME/.local/state/hyprnotch/tasks.json"
+
 #  ── Auto-install: refresh the installed copy from THIS folder ─────
 if [ "$HERE" != "$INSTALLED" ]; then
     mkdir -p "$INSTALLED"

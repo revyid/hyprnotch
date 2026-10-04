@@ -60,7 +60,7 @@ Singleton {
     }
 
     function switchTo(id) {
-        Hyprland.dispatch("workspace " + id)
+        dispatch("workspace " + id)
     }
 
     //  Running application classes, deduplicated — the dock uses this to
@@ -97,8 +97,35 @@ Singleton {
         return ""
     }
 
+    //  ── Dispatch (k4 / Lua-fork compatible) ─────────────────────
+    //  Mainline Hyprland wants  dispatch workspace 2.
+    //  The k4 Lua fork wraps the request verbatim into Lua:
+    //      return hl.dispatch(workspace 2)      <- syntax error
+    //  so the args must be a valid Lua argument LIST. Quoting every
+    //  token keeps the intent readable by both worlds:
+    //      return hl.dispatch("workspace", 2)   <- works on k4
+    //  On mainline Hyprland set config key hypr.luaDispatch = false.
+    function luaArgs(s) {
+        const parts = String(s).trim().split(/\s+/)
+        const out = []
+        for (let i = 0; i < parts.length; ++i) {
+            const p = parts[i]
+            if (p.length === 0)
+                continue
+            if ((p.charAt(0) === '"' && p.charAt(p.length - 1) === '"')
+                || (p.charAt(0) === "'" && p.charAt(p.length - 1) === "'"))
+                out.push(p)
+            else
+                out.push('"' + p.replace(/"/g, '\\"') + '"')
+        }
+        return out.join(", ")
+    }
+
     //  Fire-and-forget dispatch for custom bindings from Settings.
     function dispatch(args) {
-        Hyprland.dispatch(args)
+        if (Config.get("hypr.luaDispatch", true))
+            Hyprland.dispatch(luaArgs(args))
+        else
+            Hyprland.dispatch(args)
     }
 }
