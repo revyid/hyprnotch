@@ -114,7 +114,7 @@ Item {
 
     Timer {
         id: pollTimer
-        interval: 1500
+        interval: 400
         running: backdrop.polling
         repeat: true
         triggeredOnStart: false

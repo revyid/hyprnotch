@@ -82,10 +82,12 @@ Window {
     component SliderRow: Rectangle {
         id: sliderRow
         property string title: ""
+        property string sub: ""
         property real value: 0
         property real from: 0
         property real to: 100
         property string suffix: ""
+        property int decimals: 0
         signal edited(real v)
         width: parent ? parent.width : 0
         height: 46
@@ -103,9 +105,21 @@ Window {
         }
         Text {
             anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: 12 + sliderRow.title.length * 7 + 14
+            visible: sliderRow.sub !== ""
+            text: sliderRow.sub
+            color: Theme.dim
+            font.family: Theme.uiFont
+            font.pixelSize: 10
+        }
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
             anchors.right: parent.right
             anchors.rightMargin: 12
-            text: Math.round(sliderRow.value) + sliderRow.suffix
+            text: (sliderRow.decimals > 0
+                       ? sliderRow.value.toFixed(sliderRow.decimals)
+                       : Math.round(sliderRow.value)) + sliderRow.suffix
             color: Theme.accent
             font.family: Theme.uiFont
             font.pixelSize: 12
@@ -1179,7 +1193,7 @@ Window {
         }
     }
 
-    //  ── Dock ──────────────────────────────────────────────────────
+    //  ── Dock — the Swift-Dock port ────────────────────────────────
     Component {
         id: dockPage
 
@@ -1187,7 +1201,7 @@ Window {
             width: parent ? parent.width : 0
             spacing: 8
 
-            SectionLabel { text: "DOCK — runs together with the island pill" }
+            SectionLabel { text: "DOCK — macOS dock by 0-ss/Swift-Dock, ported" }
 
             SwitchRow {
                 title: "Enabled"
@@ -1195,21 +1209,161 @@ Window {
                 checked: Config.data.dock.enabled
                 onFlipped: Config.set("dock.enabled", !Config.data.dock.enabled)
             }
-            SwitchRow {
-                title: "Auto-hide"
-                sub: "hide when unused, wake from the bottom edge"
-                checked: Config.data.dock.autoHide
-                onFlipped: Config.set("dock.autoHide", !Config.data.dock.autoHide)
+
+            SectionLabel { text: "AUTO-HIDE"; topPadding: 10 }
+
+            //  Hide mode — three-way segmented control (Swift-Dock's
+            //  Smart / Always / Never)
+            Rectangle {
+                width: parent ? parent.width : 0
+                height: 46
+                radius: Theme.radiusSmall
+                color: Theme.surface
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    text: "Hide mode"
+                    color: Theme.ink
+                    font.family: Theme.uiFont
+                    font.pixelSize: 12
+                }
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 12
+                    spacing: 4
+
+                    Repeater {
+                        model: [
+                            { k: "smart",  label: "Smart" },
+                            { k: "always", label: "Always" },
+                            { k: "never",  label: "Never" }
+                        ]
+                        delegate: Rectangle {
+                            id: segCell
+                            required property var modelData
+                            readonly property bool sel:
+                                Config.data.dock.hideMode === segCell.modelData.k
+                            width: 62; height: 26
+                            radius: 6
+                            color: sel ? Theme.accent : Theme.track
+                            Behavior on color { ColorAnimation { duration: 140 } }
+                            Text {
+                                anchors.centerIn: parent
+                                text: parent.modelData.label
+                                color: parent.sel ? "#ffffff" : Theme.muted
+                                font.family: Theme.uiFont
+                                font.pixelSize: 11
+                                font.weight: parent.sel ? Font.DemiBold : Font.Normal
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: Config.set("dock.hideMode", segCell.modelData.k)
+                            }
+                        }
+                    }
+                }
+            }
+            Text {
+                width: parent ? parent.width : 0
+                text: "Smart hides only while a tiled window needs the space — Always is classic auto-hide, Never keeps the dock visible and reserves screen space."
+                color: Theme.dim
+                font.family: Theme.uiFont
+                font.pixelSize: 10
+                wrapMode: Text.WordWrap
+                leftPadding: 12
+            }
+            SliderRow {
+                title: "Hide delay"
+                from: 0; to: 1500
+                value: Config.data.dock.hideDelay
+                suffix: " ms"
+                onEdited: (v) => Config.set("dock.hideDelay", Math.round(v))
             }
             SwitchRow {
-                title: "Show running apps"
-                checked: Config.data.dock.showRunning
-                onFlipped: Config.set("dock.showRunning", !Config.data.dock.showRunning)
+                title: "Primary display only"
+                sub: "off = the dock shows on every monitor"
+                checked: Config.data.dock.primaryOnly
+                onFlipped: Config.set("dock.primaryOnly", !Config.data.dock.primaryOnly)
             }
+
+            SectionLabel { text: "BEHAVIOR"; topPadding: 10 }
+
             SwitchRow {
                 title: "Magnify on hover"
+                sub: "cosine pointer-follow wave, like the real dock"
                 checked: Config.data.dock.magnify
                 onFlipped: Config.set("dock.magnify", !Config.data.dock.magnify)
+            }
+            SliderRow {
+                title: "Magnification amount"
+                from: 1.1; to: 2.5
+                decimals: 2
+                value: Config.data.dock.magnification
+                suffix: "×"
+                onEdited: (v) => Config.set("dock.magnification", v)
+            }
+            SwitchRow {
+                title: "Show labels"
+                sub: "app name tooltip on hover"
+                checked: Config.data.dock.showLabels
+                onFlipped: Config.set("dock.showLabels", !Config.data.dock.showLabels)
+            }
+            SwitchRow {
+                title: "Running indicators"
+                sub: "dots under open apps"
+                checked: Config.data.dock.showIndicators
+                onFlipped: Config.set("dock.showIndicators", !Config.data.dock.showIndicators)
+            }
+            SwitchRow {
+                title: "Bounce while launching"
+                checked: Config.data.dock.bounce
+                onFlipped: Config.set("dock.bounce", !Config.data.dock.bounce)
+            }
+            SwitchRow {
+                title: "Window previews"
+                sub: "open windows appear as live cells next to the Trash"
+                checked: Config.data.dock.showThumbs
+                onFlipped: Config.set("dock.showThumbs", !Config.data.dock.showThumbs)
+            }
+            SwitchRow {
+                title: "Show Trash"
+                checked: Config.data.dock.showTrash
+                onFlipped: Config.set("dock.showTrash", !Config.data.dock.showTrash)
+            }
+
+            SectionLabel { text: "APPEARANCE"; topPadding: 10 }
+
+            SliderRow {
+                title: "Icon size"
+                from: 32; to: 96
+                value: Config.data.dock.iconSize
+                suffix: " px"
+                onEdited: (v) => Config.set("dock.iconSize", Math.round(v))
+            }
+            SliderRow {
+                title: "Icon spacing"
+                from: 0; to: 20
+                value: Config.data.dock.spacing
+                suffix: " px"
+                onEdited: (v) => Config.set("dock.spacing", Math.round(v))
+            }
+            SliderRow {
+                title: "Distance from screen edge"
+                from: 0; to: 40
+                value: Config.data.dock.edgeMargin
+                suffix: " px"
+                onEdited: (v) => Config.set("dock.edgeMargin", Math.round(v))
+            }
+            SliderRow {
+                title: "Corner radius"
+                from: 0; to: 32
+                value: Config.data.dock.cornerRadius
+                suffix: " px"
+                onEdited: (v) => Config.set("dock.cornerRadius", Math.round(v))
             }
             SwitchRow {
                 title: "Liquid Glass"
@@ -1218,136 +1372,66 @@ Window {
                 onFlipped: Config.set("dock.liquid", !Config.data.dock.liquid)
             }
             SliderRow {
-                title: "Icon size"
-                from: 28; to: 60
-                value: Config.data.dock.iconSize
-                suffix: " px"
-                onEdited: (v) => Config.set("dock.iconSize", Math.round(v))
-            }
-            SliderRow {
-                title: "Dock height"
-                from: 44; to: 84
-                value: Config.data.dock.dockHeight
-                suffix: " px"
-                onEdited: (v) => Config.set("dock.dockHeight", Math.round(v))
+                title: "Translucency"
+                sub: "how much tint the glass adds over the refraction"
+                from: 0; to: 0.85
+                decimals: 2
+                value: Config.data.dock.glassOpacity
+                suffix: ""
+                onEdited: (v) => Config.set("dock.glassOpacity", v)
             }
 
-            SectionLabel { text: "PINNED APPS — label, icon, command"; topPadding: 10 }
+            SectionLabel { text: "PINNED APPS"; topPadding: 10 }
 
-            Repeater {
-                model: Config.data.dock.pinned
-
-                delegate: Rectangle {
-                    id: pinEdit
-                    required property var modelData
-                    required property int index
-                    //  Stale index during removals can point past the array.
-                    readonly property var pin: Config.data.dock.pinned[index] || null
-                    width: parent ? parent.width : 0
-                    height: 96
-                    radius: Theme.radiusSmall
-                    color: Theme.surface
-
-                    Row {
-                        x: 12; y: 10
-                        width: parent.width - 24
-                        spacing: 10
-
-                        Rectangle {
-                            width: 30; height: 30; radius: 8
-                            color: Theme.surfaceHi
-                            anchors.verticalCenter: parent.verticalCenter
-                            Glyph {
-                                anchors.centerIn: parent
-                                size: 14
-                                colorVal: Theme.ink
-                                glyph: Config.data.dock.pinned[pinEdit.index].glyph
-                            }
-                        }
-
-                        Column {
-                            width: parent.width - 90
-                            spacing: 6
-
-                            Row {
-                                spacing: 6
-                                width: parent.width
-                                TextField {
-                                    id: pinLabelField
-                                    width: parent.width / 2 - 3
-                                    height: 26
-                                    text: Config.data.dock.pinned[pinEdit.index].label
-                                    color: Theme.ink
-                                    font.family: Theme.uiFont
-                                    font.pixelSize: 11
-                                    selectByMouse: true
-                                    background: Rectangle {
-                                        radius: 6; color: Theme.surfaceHi
-                                        border.width: pinLabelField.activeFocus ? 1 : 0
-                                        border.color: Theme.accent
-                                    }
-                                    onEditingFinished: settingsWindow.updatePin(pinEdit.index, "label", text)
-                                }
-                                TextField {
-                                    id: pinCmdField
-                                    width: parent.width / 2 - 3
-                                    height: 26
-                                    text: Config.data.dock.pinned[pinEdit.index].command
-                                    color: Theme.muted
-                                    font.family: "monospace"
-                                    font.pixelSize: 10
-                                    selectByMouse: true
-                                    placeholderText: "command (empty = try the label as a binary)"
-                                    background: Rectangle {
-                                        radius: 6; color: Theme.surfaceHi
-                                        border.width: pinCmdField.activeFocus ? 1 : 0
-                                        border.color: Theme.accent
-                                    }
-                                    onEditingFinished: settingsWindow.updatePin(pinEdit.index, "command", text)
-                                }
-                            }
-
-                            GlyphPick {
-                                chosen: pinEdit.pin ? pinEdit.pin.glyph : ""
-                                onUserPicked: (g) => settingsWindow.updatePin(pinEdit.index, "glyph", g)
-                            }
-                        }
-
-                        Rectangle {
-                            width: 26; height: 26; radius: 6
-                            color: delPin.containsMouse ? Theme.red : Theme.track
-                            anchors.verticalCenter: parent.verticalCenter
-                            Glyph { anchors.centerIn: parent; size: 10; colorVal: "#ffffff"; glyph: Icons.trash }
-                            MouseArea {
-                                id: delPin; anchors.fill: parent; hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: settingsWindow.removePin(pinEdit.index)
-                            }
-                        }
-                    }
-                }
+            Text {
+                width: parent ? parent.width : 0
+                text: "Pins are managed live from the dock: right-click any app for Keep in Dock / Remove, and drag pinned icons to reorder them. Pins are saved to config.json automatically."
+                color: Theme.dim
+                font.family: Theme.uiFont
+                font.pixelSize: 10
+                wrapMode: Text.WordWrap
+                leftPadding: 12
             }
 
             Rectangle {
-                width: 150; height: 32
+                id: resetPinsBtn
+                property bool armed: false
+                width: 190; height: 32
                 radius: Theme.radiusSmall
-                color: addPin.containsMouse ? Theme.surfaceHi : Theme.track
+                color: resetPinsBtn.armed ? Theme.red
+                       : (resetPinsMa.containsMouse ? Theme.surfaceHi : Theme.track)
+                Behavior on color { ColorAnimation { duration: 140 } }
                 Row {
                     anchors.centerIn: parent
                     spacing: 6
-                    Glyph { anchors.verticalCenter: parent.verticalCenter; size: 11; colorVal: Theme.ink; glyph: Icons.plus }
+                    Glyph { anchors.verticalCenter: parent.verticalCenter; size: 11; colorVal: Theme.ink; glyph: Icons.trash }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Add pinned app"
+                        text: resetPinsBtn.armed ? "Click again to confirm" : "Reset Dock Items"
                         color: Theme.ink
                         font.family: Theme.uiFont
                         font.pixelSize: 11
                     }
                 }
                 MouseArea {
-                    id: addPin; anchors.fill: parent; hoverEnabled: true
+                    id: resetPinsMa; anchors.fill: parent; hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: settingsWindow.addPin()
+                    onClicked: {
+                        if (resetPinsBtn.armed) {
+                            resetPinsBtn.armed = false
+                            dockResetDisarm.stop()
+                            Config.setList("dock.pinned",
+                                JSON.parse(JSON.stringify(Config.defaults.dock.pinned)))
+                        } else {
+                            resetPinsBtn.armed = true
+                            dockResetDisarm.restart()
+                        }
+                    }
+                }
+                Timer {
+                    id: dockResetDisarm
+                    interval: 3000
+                    onTriggered: resetPinsBtn.armed = false
                 }
             }
         }
@@ -2284,29 +2368,8 @@ Window {
         Config.setList("quickActions", arr)
     }
 
-    function updatePin(index, key, value) {
-        const arr = JSON.parse(JSON.stringify(Config.data.dock.pinned))
-        if (index < 0 || index >= arr.length)
-            return
-        //  Same no-op guard as updateQuickAction: identical writes are
-        //  the seed of the recreate → focus-loss → re-edit loop.
-        if (arr[index][key] === value)
-            return
-        arr[index][key] = value
-        Config.setList("dock.pinned", arr)
-    }
-
-    function removePin(index) {
-        const arr = JSON.parse(JSON.stringify(Config.data.dock.pinned))
-        if (index < 0 || index >= arr.length)
-            return
-        arr.splice(index, 1)
-        Config.setList("dock.pinned", arr)
-    }
-
-    function addPin() {
-        const arr = JSON.parse(JSON.stringify(Config.data.dock.pinned))
-        arr.push({ label: "New app", glyph: "\uF111", command: "" })
-        Config.setList("dock.pinned", arr)
-    }
+    //  Pin management moved INTO the dock itself (Swift-Dock model):
+    //  right-click an icon for Keep in Dock / Remove, drag icons to
+    //  reorder.  Pins persist to config.json dock.pinned.  Settings →
+    //  Dock only offers Reset Dock Items.
 }

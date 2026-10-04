@@ -79,22 +79,36 @@ is not.
 - **Quick actions** — built-ins (DND, night light, screenshot, record,
   terminal, files, wallpaper, stats, power, about, lock, settings) plus
   unlimited custom shell-command actions.
-- **Dock (real macOS anatomy)** — **real application icons** resolved
-  through the system icon theme and .desktop entries (three-pass match:
-  icon name → lowercase → DesktopEntries), soft drop shadows, no tiles,
-  pointer-following **cosine magnification wave** (the swell bends
-  smoothly as the cursor sweeps the shelf), launch **bounce**, press
-  squish, running dots under icons (white = focused), hover tooltips.
-  Pinned apps are `.desktop` ids (legacy glyph pins still work); running
-  unpinned apps join the dock automatically; clicking a pinned app focuses
-  it if running, otherwise launches it via its desktop entry.
-- **Dock Liquid Glass** — the shelf is a slab of refracting glass: a
-  fragment shader (ported from [0-ss/Swift-Dock](https://github.com/0-ss/Swift-Dock))
-  bends the wallpaper and the LIVE windows behind the dock — squircle
-  bezel refraction, chromatic dispersion, specular rim, grain and a soft
-  drop shadow. The shader compiles once with `qsb` (qt6-shadertools) on
-  first use and is cached; without qsb the dock falls back to its frosted
-  glass automatically. Toggle in Settings → Dock → Liquid Glass.
+- **Dock — the real Swift-Dock, ported** — the dock is a full port of
+  [0-ss/Swift-Dock](https://github.com/0-ss/Swift-Dock) (macdock v2),
+  adapted to HyprNotch's config/settings system. Pinned apps come from
+  real `.desktop` entries with theme icons; running-but-unpinned apps
+  join after a separator; **running dots** under open apps; **launch
+  bounce**; hover tooltips; Trash (`trash:///`); live **window preview
+  cells** next to the Trash (per-window ScreencopyView with the app icon
+  as badge). Left-click focuses an app and cycles through its windows
+  (or launches it), middle-click opens a new window, right-click opens
+  the **glass context menu**: the app's open windows, Keep in Dock /
+  Remove from Dock, New Window, Quit and Dock Preferences… (opens
+  Settings → Dock). **Drag pinned icons to reorder** — the others slide
+  out of the way. **Smart auto-hide** hides the dock only while a tiled
+  window occupies the workspace (Always / Never modes too; Never
+  reserves screen space), and it slides back from the screen edge. The
+  cosine **pointer-follow magnification wave** is unchanged from
+  upstream. The dock's input mask means only the bar itself is
+  clickable — never the invisible strip around it.
+- **Dock Liquid Glass** — the shelf is a slab of refracting glass: the
+  original Swift-Dock fragment shader bends the wallpaper and the LIVE
+  windows behind the dock — squircle bezel refraction, chromatic
+  dispersion, specular rim, grain and a soft drop shadow. The shader
+  compiles once with `qsb` (qt6-shadertools) on first use and is
+  cached; without qsb the dock falls back to its frosted glass
+  automatically. `start.sh` applies `layerrule` blur/ignorealpha/noanim
+  for the `hyprnotch-dock` namespace via `hyprctl keyword` (works on
+  mainline and the k4 Lua fork). Everything is tunable in
+  Settings → Dock (size, magnification, spacing, edge distance, radius,
+  translucency, hide mode and delay, labels, indicators, bounce,
+  previews, Trash, primary-display-only, reset pins).
 - **Notifications (HyprNotch IS the daemon)** — Quickshell's
   NotificationServer claims org.freedesktop.Notifications, so banners
   render INSIDE the island window under the pill: app icon, summary, body,
@@ -183,8 +197,10 @@ names: `controlCenter`, `calendar`, `notifications`, `launcher`, `weather`,
 
 Everything persists at `~/.config/hyprnotch/config.json` and applies live.
 Notable keys: `island.maxVisibleWorkspaces`, `island.peekEnabled`,
-`wallpaper.dir/transition/duration`, `dock.pinned` (desktop ids or legacy
-glyph pins), `plugins.disabled`, `quickActions`, `controlCenter.sections`,
+`wallpaper.dir/transition/duration`, `dock.pinned` (.desktop id strings —
+managed live from the dock: right-click → Keep in Dock, drag to reorder),
+`dock.hideMode` (smart / always / never), `dock.liquid`, `dock.glassOpacity`,
+`plugins.disabled`, `quickActions`, `controlCenter.sections`,
 `hypr.luaDispatch` (default `true` — quote dispatch args for the k4 Lua
 fork; set to `false` on mainline Hyprland).
 

@@ -74,6 +74,10 @@ v16 — Liquid Glass round: ScreencopyView (Quickshell.Wayland),
   ShaderEffect / ShaderEffectSource / ListModel (QtQuick) added to the
   module map so the new dock glass components are import-checked like
   everything else.
+v17 — Swift-Dock dock port: ToplevelManager (Quickshell.Wayland) and
+  Shortcut (QtQuick) added to the module map — the dock's windowsFor()
+  iterates ToplevelManager.toplevels and an unimported reference would
+  fail at load time exactly like the ScrollIndicator class of r16.
 """
 import os, re, sys
 
@@ -126,7 +130,9 @@ REQUIRED_MODULE = {
     "ShaderEffect": "QtQuick", "ShaderEffectSource": "QtQuick",
     "ListModel": "QtQuick",
     "ScreencopyView": "Quickshell.Wayland",
+    "ToplevelManager": "Quickshell.Wayland",
     "MultiEffect": "QtQuick.Effects",
+    "Shortcut": "QtQuick",
 }
 
 #  Properties that exist on Quickshell's PanelWindow (proven: IslandWindow
@@ -242,7 +248,7 @@ BASE_PROPS = {
     "SequentialAnimation": I | {"running", "loops", "alwaysRunToEnd"},
     "Behavior": I | {"animation", "enabled"},
     "HoverHandler": I | {"hovered", "hoverEnabled", "acceptedButtons",
-                         "cursorShape", "blocking", "enabled"},
+                         "cursorShape", "blocking", "enabled", "point"},
     "TapHandler": I | {"tapped", "pressed", "gesturePolicy", "acceptedButtons",
                        "exclusive", "enabled"},
     "RotationAnimation": I | {"from", "to", "duration", "running", "loops",
@@ -619,10 +625,14 @@ def main():
             errs.append(f"{path}:{ol} unclosed {o}")
 
         # ---- v2: type resolution + imports --------------------------------
+        #  Singletons declared in local qmldirs count as local types too —
+        #  services/Bluetooth.qml shadows Quickshell.Bluetooth wherever the
+        #  services module is imported.
         local = set(dirmap[d]["types"])
         for m in re.finditer(r'import\s+"([^"]+)"', info["raw"]):
             if not m.group(1).endswith(".js"):
-                local |= qmldir_map(os.path.normpath(os.path.join(d, m.group(1))))["types"]
+                qd = qmldir_map(os.path.normpath(os.path.join(d, m.group(1))))
+                local |= qd["types"] | set(qd["singletons"].keys())
         declared_comp = set(re.findall(r"\bcomponent\s+(\w+)\s*:", info["code"]))
         structural = set(o["type"] for o in scan_objects(info["toks"]))
         for t in structural:
@@ -630,7 +640,16 @@ def main():
                and t not in QT_BASE and t not in BASE_PROPS:
                 errs.append(f"{path}: unresolved type '{t}'")
         mods = set(re.findall(r"import\s+(\S+)", info["raw"]))
-        for t in structural | set(re.findall(r"\b([A-Z]\w+)\.\w+", info["code"])):
+        #  The tokenizer inserts spaces around '.', which left the X.Y
+        #  member-access import check dead ("ToplevelManager . toplevels"
+        #  never matched).  Re-join dots before scanning so usages inside
+        #  JS function bodies are import-checked too (v17: the dock's
+        #  windowsFor() walks ToplevelManager.toplevels).
+        co_dots = re.sub(r"\s*\.\s*", ".", info["code"])
+        for t in structural | set(re.findall(r"\b([A-Z]\w+)\.\w+", co_dots)):
+            if t in local:
+                continue   # a local type shadows the module type (services/
+                           # Bluetooth.qml over Quickshell.Bluetooth, etc.)
             req = REQUIRED_MODULE.get(t)
             if req and req not in mods:
                 errs.append(f"{path}: type '{t}' needs 'import {req}' (missing)")
@@ -753,6 +772,11 @@ def main():
                 #  the base (e.g. DockIcon root = Rectangle + `size`).
                 okp = okp | info["props"]
                 rop = rop | info["ro"]
+            #  ANY object may carry its own `property` declarations, and a
+            #  Behavior legitimately targets them (the dock's `Behavior on
+            #  mx / dx / strength / appear` are all custom-declared props
+            #  on nested Items — refusing them was a false positive).
+            okp = okp | set(n for n, _ in obj.get("props_decl", []))
             for name, ln in targets:
                 seg = name.split(".")[0]
                 if seg in GROUPS:
@@ -932,7 +956,7 @@ def main():
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v16)")
+    print(f"Checked {len(files)} QML files (v17)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

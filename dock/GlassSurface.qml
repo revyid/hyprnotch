@@ -37,10 +37,13 @@ Item {
     property real radius: 24
     property bool active: false          // master switch from the dock
 
-    //  Look tuning (Swift-Dock defaults, dark mode)
+    //  Look tuning (Swift-Dock defaults, dark mode).  `tint` is the
+    //  dock's Translucency setting (config dock.glassOpacity) — Swift-Dock
+    //  mixes it into the shader as tintMix = glassOpacity * 0.55.
     property real rimStrength: 0.45
     property real grainAmt: 0.03
     property real liquidAmt: 1.0
+    property real tint: 0.42
 
     //  ── State machine ─────────────────────────────────────────────
     //  idle → building (qsb running) → ready | failed.  "failed" never
@@ -51,7 +54,7 @@ Item {
     readonly property real padPx: 10
     readonly property real margin: 48    // extra backdrop around the glass
 
-    visible: ready
+    visible: ready && active
     width: glassW + 2 * padPx
     height: glassH + 2 * padPx
 
@@ -138,7 +141,7 @@ Item {
         property real rim: glass.rimStrength
         property real grain: glass.grainAmt
         property real blurPx: 5
-        property real tintMix: 0.23
+        property real tintMix: glass.tint * 0.55
         property real saturation: 1.25
         property real dark: 1
         property real debug: 0

@@ -68,5 +68,22 @@ fi
 #  After a manual `hyprctl reload`, re-apply without relaunching:
 #    quickshell ipc -p <installed>/shell.qml call notch applyKeys
 
+#  ── Dock layer rules ─────────────────────────────────────────────
+#  Runtime layer rules for the dock surface (namespace hyprnotch-dock):
+#  compositor blur + hairline alpha handling under the frosted fallback,
+#  no open/close animation (the dock animates itself). Applied via
+#  `hyprctl keyword` so it works identically on mainline hyprland.conf
+#  and the k4 Lua fork, and can never break a config parse. A manual
+#  `hyprctl reload` clears them — restart the shell to re-apply.
+#  Persistent alternative for hyprland.conf users (see sample file):
+#    layerrule = blur, hyprnotch-dock
+#    layerrule = ignorealpha 0.2, hyprnotch-dock
+#    layerrule = noanim, hyprnotch-dock
+if command -v hyprctl >/dev/null 2>&1; then
+    hyprctl keyword layerrule "blur, hyprnotch-dock" >/dev/null 2>&1 || true
+    hyprctl keyword layerrule "ignorealpha 0.2, hyprnotch-dock" >/dev/null 2>&1 || true
+    hyprctl keyword layerrule "noanim, hyprnotch-dock" >/dev/null 2>&1 || true
+fi
+
 echo "[HyprNotch] launching: $INSTALLED/shell.qml"
 exec quickshell -p "$INSTALLED/shell.qml" "$@"

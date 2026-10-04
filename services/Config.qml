@@ -24,7 +24,7 @@ Singleton {
         general: {
             accent: "#0a84ff",
             animations: true,
-            cfgVersion: 3
+            cfgVersion: 4
         },
         island: {
             enabled: true,
@@ -66,19 +66,34 @@ Singleton {
         ],
         dock: {
             enabled: true,
-            autoHide: false,
-            iconSize: 40,
-            dockHeight: 62,
-            showRunning: true,
+            //  Swift-Dock behavior model (port of 0-ss/Swift-Dock):
+            //  smart = hide only while a tiled window needs the space,
+            //  always = classic auto-hide, never = visible + reserves space.
+            hideMode: "smart",
+            hideDelay: 450,
+            iconSize: 52,
+            magnification: 1.7,
             magnify: true,
+            spacing: 6,
+            edgeMargin: 6,
+            cornerRadius: 18,
+            showLabels: true,
+            showIndicators: true,
+            bounce: true,
+            showTrash: true,
+            showThumbs: true,
             liquid: true,
+            glassOpacity: 0.42,
+            primaryOnly: false,
+            //  .desktop ids — unknown ids are skipped, so this list is
+            //  safe on any machine.  Managed live from the dock itself
+            //  (right-click → Keep in Dock, drag to reorder).
             pinned: [
-                { label: "Terminal",  glyph: "\uF120", command: "" },
-                { label: "Files",     glyph: "\uF07B", command: "" },
-                { label: "Browser",   glyph: "\uF26C", command: "" },
-                { label: "Music",     glyph: "\uF001", command: "" }
-            ],
-            autoPin: true
+                "org.gnome.Nautilus", "org.kde.dolphin", "thunar",
+                "firefox", "zen", "chromium", "google-chrome",
+                "kitty", "com.mitchellh.ghostty", "Alacritty", "foot",
+                "code", "discord", "spotify", "steam", "obsidian"
+            ]
         },
         calendar: {
             enabled: true,
@@ -220,10 +235,12 @@ Singleton {
         //      exists in the control center.
         //  v3: the System section (About This Device / Monitor / Wallpaper
         //      entries) did not exist yet — inject it after the toggles.
+        //  v4: the dock became the Swift-Dock port — hideMode replaces the
+        //      autoHide flag, and pins are .desktop id strings (legacy
+        //      {label,glyph,command} pins are dropped for Swift-Dock's set).
         const ver = (disk && disk.general && disk.general.cfgVersion) || 1
         if (ver < 2) {
             data.dock.enabled = true
-            data.dock.autoHide = false
             data.island.peekEnabled = true
             if (data.controlCenter.sections.indexOf("plugins") < 0)
                 data.controlCenter.sections.push("plugins")
@@ -235,7 +252,17 @@ Singleton {
             else
                 data.controlCenter.sections.unshift("system")
         }
-        data.general.cfgVersion = 3
+        if (ver < 4) {
+            data.dock.hideMode = data.dock.autoHide === true ? "always" : "smart"
+            const cleanPins = Array.isArray(data.dock.pinned)
+                ? data.dock.pinned.filter(function (p) { return typeof p === "string" })
+                : []
+            if (cleanPins.length === 0)
+                data.dock.pinned = JSON.parse(JSON.stringify(defaults.dock.pinned))
+            else
+                data.dock.pinned = cleanPins
+        }
+        data.general.cfgVersion = 4
         loaded = true
         Theme.accent = data.general.accent || "#0a84ff"
     }
