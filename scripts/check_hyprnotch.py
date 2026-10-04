@@ -16,6 +16,9 @@ v5 — read-only property class:
      property, or property+'Changed'.
   7. Singleton member references (Theme.x, Audio.y()) must be declared.
   8. id/property name collisions + duplicate ids inside one file.
+v6 — duplicate method names per object (Catches: 'Duplicate method
+  name' — e.g. switchTo() defined twice after a merge) and duplicate
+  property declarations per object.
 """
 import os, re, sys
 
@@ -364,6 +367,31 @@ def scan_objects(toks):
         elif k == "p" and v in "[(":
             stack.append(("grp", None))
         elif k == "id":
+            #  function declaration — attribute to the enclosing QML object
+            #  (bodies are JS frames, so closures never double-count).
+            if v == "function":
+                nxt = toks[idx+1] if idx + 1 < len(toks) else None
+                if nxt and nxt[0] == "id" and stack and stack[-1][0] == "qml":
+                    stack[-1][1].setdefault("funcs_decl", []).append(
+                        (nxt[1], nxt[2]))
+                continue
+            #  property declaration — record (name, line) on the owner so
+            #  v6 can flag redeclarations in the same object.
+            if v == "property":
+                j = idx + 1
+                if j < len(toks) and toks[j][0] == "id":
+                    j += 1
+                    if j < len(toks) and toks[j][0] == "p" and toks[j][1] == "<":
+                        depth = 1; j += 1
+                        while j < len(toks) and depth:
+                            if toks[j][0] == "p" and toks[j][1] == "<": depth += 1
+                            elif toks[j][0] == "p" and toks[j][1] == ">": depth -= 1
+                            j += 1
+                if j < len(toks) and toks[j][0] == "id" \
+                   and stack and stack[-1][0] == "qml":
+                    stack[-1][1].setdefault("props_decl", []).append(
+                        (toks[j][1], toks[j][2]))
+                continue
             prv = toks[idx-1] if idx else None
             if prv and prv[0] == "id" and prv[1] == "on":
                 #  'Behavior on x' target — record BEFORE the colon check:
@@ -674,12 +702,31 @@ def main():
                 errs.append(f'{path}:{ln} duplicate id "{i}"')
             seen_ids[i] = True
 
+        # ---- v6: duplicate methods / property declarations per object ------
+        #  (Catches: @services/Hypr.qml[100:14]: Duplicate method name)
+        for obj in scan_objects(info["toks"]):
+            seen_fn = {}
+            for fn, ln in obj.get("funcs_decl", []):
+                if fn in seen_fn:
+                    errs.append(f'{path}:{ln} duplicate method "{fn}" in '
+                                f'{obj["type"]} (first at line {seen_fn[fn]})')
+                else:
+                    seen_fn[fn] = ln
+            seen_pp = {}
+            for pp, ln in obj.get("props_decl", []):
+                if pp in seen_pp:
+                    errs.append(f'{path}:{ln} duplicate property declaration '
+                                f'"{pp}" in {obj["type"]} '
+                                f'(first at line {seen_pp[pp]})')
+                else:
+                    seen_pp[pp] = ln
+
         for e in errs:
             print("FAIL", e); failures += 1
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v5)")
+    print(f"Checked {len(files)} QML files (v6)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

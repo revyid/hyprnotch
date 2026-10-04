@@ -97,10 +97,6 @@ Singleton {
         return ""
     }
 
-    function switchTo(id) {
-        Hyprland.dispatch("workspace " + id)
-    }
-
     //  Fire-and-forget dispatch for custom bindings from Settings.
     function dispatch(args) {
         Hyprland.dispatch(args)
