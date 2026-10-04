@@ -26,6 +26,10 @@ Singleton {
     //  Launcher is Super+Space (a plain chord — no release-bind magic,
     //  no fork quirks). Super+D is gone from the defaults; re-add it
     //  here in Settings if you miss it.
+    //  r24 batch (user: "keybind ini aku mau kamu set set sekalian,
+    //  kyk screenshot, dll"): Print = screenshot, Shift+Print = screen
+    //  recording, Super+V = clipboard history (Win+V), Super+U =
+    //  containers, Super+Y = AI agent status, Super+A = quick toggles.
     readonly property var defaults: [
         { action: "launcher",      mods: "SUPER", key: "SPACE" },
         { action: "controlCenter", mods: "SUPER", key: "C" },
@@ -39,7 +43,13 @@ Singleton {
         { action: "plugins",       mods: "SUPER", key: "O" },
         { action: "settings",      mods: "SUPER", key: "S" },
         { action: "dnd",           mods: "SUPER", key: "B" },
-        { action: "podman",        mods: "SUPER", key: "P" }
+        { action: "podman",        mods: "SUPER", key: "P" },
+        { action: "clipboard",     mods: "SUPER", key: "V" },
+        { action: "screenshot",    mods: "",      key: "PRINT" },
+        { action: "record",        mods: "SHIFT", key: "PRINT" },
+        { action: "containers",    mods: "SUPER", key: "U" },
+        { action: "agent",         mods: "SUPER", key: "Y" },
+        { action: "quickToggles",  mods: "SUPER", key: "A" }
     ]
 
     readonly property var labels: ({
@@ -55,8 +65,29 @@ Singleton {
         plugins:       { title: "Plugins",         sub: "plugin manager" },
         settings:      { title: "Settings",        sub: "the settings window" },
         dnd:           { title: "Do Not Disturb",  sub: "silence banners" },
-        podman:        { title: "Containers",      sub: "podman manager page" }
+        podman:        { title: "Containers",      sub: "podman manager page" },
+        clipboard:     { title: "Clipboard",       sub: "clipboard history (Win+V)" },
+        screenshot:    { title: "Screenshot",      sub: "capture a region or screen" },
+        record:        { title: "Screen Recording",sub: "start / stop wf-recorder" },
+        containers:    { title: "Containers Panel",sub: "podman containers in the notch" },
+        agent:         { title: "AI Agent Status", sub: "agent status and usage" },
+        quickToggles:  { title: "Quick Toggles",   sub: "per-feature switches panel" }
     })
+
+    //  The action list Settings → Keybinds renders. r23 shipped this
+    //  page binding `model: Hotkeys.actions` WITHOUT the property ever
+    //  existing — the Repeater got `undefined` and the page showed zero
+    //  rows (the user's "keybind kedetec 0"). Derived from the map so
+    //  user-added entries also appear.
+    readonly property var actions: {
+        const out = []
+        for (let i = 0; i < defaults.length; ++i)
+            out.push(defaults[i].action)
+        for (const a in map)
+            if (out.indexOf(a) < 0)
+                out.push(a)
+        return out
+    }
 
     //  ── Effective map: saved chords win, defaults fill the rest ──
     //  A saved entry may legitimately be { mods:"", key:"" } (user
@@ -134,12 +165,31 @@ Singleton {
 
     //  ── Applying ─────────────────────────────────────────────────
     //  Install folder = the folder holding the shell.qml this service
-    //  was loaded from — quickshell always runs the synced copy, so
-    //  `quickshell ipc -p <raiz>/shell.qml` targets THIS instance.
+    //  was loaded from. Quickshell exposes it DIRECTLY as
+    //  Quickshell.shellDir (verified in the vendored source:
+    //  src/core/qmlglobal.hpp — "The full path to the root directory
+    //  of your shell"). The old Qt.resolvedUrl trick broke on this
+    //  user's build: it returned a `qs:@qs/...` resource URL, the
+    //  file:// strip was a no-op, and the probe path became the
+    //  literal string "qs:@qs/scripts/apply-keys.sh" — the applier
+    //  never ran and the summary read "applier script missing" (r24
+    //  user report). shellDir needs no URL gymnastics at all.
     readonly property string raiz: {
-        const u = Qt.resolvedUrl("../shell.qml").toString()
-        const p = u.replace(/^file:\/\//, "").replace(/\/shell\.qml$/, "")
-        return decodeURIComponent(p)
+        let p = String(Quickshell.shellDir || "")
+        if (p.length === 0) {
+            const u = Qt.resolvedUrl("../shell.qml").toString()
+            if (u.indexOf("file://") === 0)
+                p = decodeURIComponent(u.replace(/^file:\/\//, "").replace(/\/shell\.qml$/, ""))
+            else if (u.indexOf("/") === 0)
+                p = decodeURIComponent(u.replace(/\/shell\.qml$/, ""))
+            else {
+                //  Last resort: the standard quickshell install location.
+                const xdg = Quickshell.env("XDG_CONFIG_HOME")
+                p = (xdg && xdg.length > 0 ? xdg : Quickshell.env("HOME") + "/.config")
+                    + "/quickshell/hyprnotch"
+            }
+        }
+        return p
     }
     readonly property string probePath: raiz + "/scripts/apply-keys.sh"
 
@@ -188,8 +238,11 @@ Singleton {
         //  here (r23 user report: "keybind kedetec 0").
         if (String(text).trim().length === 0) {
             applierMissing = true
-            lastSummary = "applier script missing at " + probePath
-                          + " — reinstall or re-sync HyprNotch"
+            //  Keep it SHORT (user: "di minimalisir ajala") - one small
+            //  line, basename only; the full path stays in probePath.
+            lastSummary = "keybind applier missing - re-run start.sh ("
+                          + probePath.split("/").pop() + ")"
+            autoClear.restart()
             return
         }
         for (let i = 0; i < lines.length; ++i) {
@@ -234,6 +287,16 @@ Singleton {
         if (luaPath.length > 0) bits.push("saved to " + luaPath.split("/").pop())
         else if (!hyprctlMissing && !bindsMissing) bits.push("runtime only (classic config)")
         lastSummary = bits.join(" · ")
+        autoClear.restart()
+    }
+
+    //  The one-line apply summary is feedback, not furniture - it
+    //  fades away after a few seconds so the keybinds page stays
+    //  clean (r24 user request: minimize the status noise).
+    Timer {
+        id: autoClear
+        interval: 8000
+        onTriggered: hotkeys.lastSummary = ""
     }
 
     Process {

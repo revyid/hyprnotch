@@ -24,7 +24,7 @@ Singleton {
         general: {
             accent: "#0a84ff",
             animations: true,
-            cfgVersion: 5
+            cfgVersion: 6
         },
         island: {
             enabled: true,
@@ -81,8 +81,11 @@ Singleton {
             fullLength: false,
             reserveSpace: true,
             clickAction: "focus-or-launch",
-            liquid: true,
-            glassOpacity: 0.42,
+            //  r24: the Liquid Glass shader is gone (user request) — the
+            //  bar is a translucent frosted surface blurred by the
+            //  compositor (layerrule blur, namespace hyprnotch-dock).
+            //  blur=false turns the compositor blur back off.
+            blur: true,
             primaryOnly: false,
             //  .desktop ids — unknown ids are skipped, so this list is
             //  safe on any machine.  Managed live from the dock itself
@@ -121,6 +124,13 @@ Singleton {
         },
         launcher: {
             enabled: true
+        },
+        //  ── Clipboard history (r24) ──────────────────────────────────
+        //  Backed by cliphist (wl-clipboard): start.sh launches the
+        //  store daemon; the notch panel reads/wipes the history.
+        clipboard: {
+            enabled: true,
+            maxPreview: 90
         },
         //  Chord map is managed by services/Hotkeys.qml — defaults live
         //  there; saved edits land under keybinds.map and win. An entry
@@ -243,6 +253,10 @@ Singleton {
         //      to margin.  The Swift-Dock-only knobs (spacing, cornerRadius,
         //      labels/indicators/bounce/trash/thumbs, magnify) are no longer
         //      read — stale keys simply sit unused in the file.
+        //  v6: Liquid Glass removed by user request ("remove liquid glass,
+        //      ganti blur frost") — dock.liquid/glassOpacity are dropped
+        //      and replaced by dock.blur; the clipboard feature section
+        //      gains its enabled flag.
         const ver = (disk && disk.general && disk.general.cfgVersion) || 1
         if (ver < 2) {
             data.dock.enabled = true
@@ -281,7 +295,17 @@ Singleton {
             else
                 data.dock.pinned = v5pins
         }
-        data.general.cfgVersion = 5
+        if (ver < 6) {
+            delete data.dock.liquid
+            delete data.dock.glassOpacity
+            if (typeof data.dock.blur !== "boolean")
+                data.dock.blur = true
+            if (!data.clipboard || typeof data.clipboard !== "object")
+                data.clipboard = JSON.parse(JSON.stringify(defaults.clipboard))
+            if (typeof data.clipboard.enabled !== "boolean")
+                data.clipboard.enabled = true
+        }
+        data.general.cfgVersion = 6
         loaded = true
         Theme.accent = data.general.accent || "#0a84ff"
     }

@@ -4,5 +4,3 @@ DockItem 1.0 DockItem.qml
 DockAppPicker 1.0 DockAppPicker.qml
 DockContextMenu 1.0 DockContextMenu.qml
 DockMenuAction 1.0 DockMenuAction.qml
-GlassBackdrop 1.0 GlassBackdrop.qml
-GlassSurface 1.0 GlassSurface.qml

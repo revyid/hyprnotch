@@ -6,13 +6,17 @@ import "../services"
 
 //  Launcher = the island's COMMAND PALETTE (r16 rework).
 //
-//  One search box over everything the notch can do, mouse optional:
+//  One search box over everything the notch can do, mouse optional,
+//  with a FILTER MENU on top (r24): All | Actions | Apps — "di
+//  launcher itu ada menu untuk show app aja". The Apps tab is the
+//  plain application grid, no palette rows.
 //
 //    · ACTIONS — every island view and switch (control center,
 //      calendar, notifications, weather, stats, wallpaper, power,
-//      about, plugins, settings, DND, containers, night light, dock,
-//      plugin reload, keybind re-apply…). Each row shows the chord
-//      that triggers it, read live from Settings → Keybinds.
+//      about, plugins, settings, DND, containers, agent, clipboard,
+//      screenshot, record, night light, dock, plugin reload, keybind
+//      re-apply, quick toggles…). Each row shows the chord that
+//      triggers it, read live from Settings → Keybinds.
 //    · APPLICATIONS — the DesktopEntries grid the launcher always had.
 //
 //  Full keyboard flow: type to filter, Up/Down (or Ctrl+J/K, PageUp/
@@ -26,9 +30,13 @@ Item {
     property string query: ""
     property int selected: 0
 
+    //  r24 filter menu: "all" (actions then apps) | "actions" | "apps".
+    readonly property var filters: ["all", "actions", "apps"]
+    property string filter: "all"
+
     //  Island contract
     property int prefWidth: 560
-    implicitHeight: 434
+    implicitHeight: 466
 
     //  ── Every island action, palette-ready ────────────────────────
     //  `act` doubles as the Hotkeys action id where one exists, so the
@@ -45,8 +53,12 @@ Item {
         { act: "plugins",       icon: Icons.cubes,     title: "Plugins",           sub: "manage installed plugins" },
         { act: "settings",      icon: Icons.gear,      title: "Settings",          sub: "the full settings window" },
         { act: "dnd",           icon: Icons.bellSlash, title: "Do Not Disturb",    sub: "silence banners instantly" },
-        { act: "podman",        icon: Icons.server,    title: "Containers",        sub: "podman manager page" },
-        { act: "agent",         icon: Icons.robot,     title: "AI Agent",          sub: "agent settings page" },
+        { act: "podman",        icon: Icons.server,    title: "Containers",        sub: "podman containers in the notch" },
+        { act: "agent",         icon: Icons.robot,     title: "AI Agent",          sub: "agent status and usage" },
+        { act: "clipboard",     icon: "\uF0EA",        title: "Clipboard History", sub: "win + v · paste anything back" },
+        { act: "screenshot",    icon: Icons.camera,    title: "Screenshot",        sub: "capture a region or screen" },
+        { act: "record",        icon: Icons.video,     title: "Screen Recording",  sub: "start / stop wf-recorder" },
+        { act: "quickToggles",  icon: Icons.sliders,   title: "Quick Toggles",     sub: "per-feature switches" },
         { act: "nightLight",    icon: Icons.moon,      title: "Night Light",       sub: "warm the screen" },
         { act: "dock",          icon: Icons.desktop,   title: "Toggle Dock",       sub: "show or hide the dock" },
         { act: "reloadPlugins", icon: Icons.refresh,   title: "Reload Plugins",    sub: "rescan the plugin folder" },
@@ -66,23 +78,30 @@ Item {
         }
 
         const out = []
+        const f = launcherCard.filter
 
-        const acts = []
-        for (let a = 0; a < actions.length; ++a) {
-            const act = actions[a]
-            if (hit((act.title + " " + act.sub).toLowerCase()))
-                acts.push(act)
-        }
-        if (acts.length > 0) {
-            out.push({ kind: "header", label: "Actions" })
-            for (let i = 0; i < acts.length; ++i)
-                out.push({ kind: "action", act: acts[i].act, icon: acts[i].icon,
-                           title: acts[i].title, sub: acts[i].sub,
-                           hint: Hotkeys.chordLabel(Hotkeys.bindingFor(acts[i].act)) })
+        if (f !== "apps") {
+            const acts = []
+            for (let a = 0; a < actions.length; ++a) {
+                const act = actions[a]
+                if (hit((act.title + " " + act.sub).toLowerCase()))
+                    acts.push(act)
+            }
+            if (acts.length > 0) {
+                out.push({ kind: "header", label: "Actions" })
+                for (let i = 0; i < acts.length; ++i)
+                    out.push({ kind: "action", act: acts[i].act, icon: acts[i].icon,
+                               title: acts[i].title, sub: acts[i].sub,
+                               hint: Hotkeys.chordLabel(Hotkeys.bindingFor(acts[i].act)) })
+            }
         }
 
-        if (query.trim().length > 0) {
-            const shown = filteredApps.slice(0, 30)
+        if (f === "apps" || query.trim().length > 0) {
+            //  Apps tab = the show-apps-only menu (cap raised so the
+            //  whole grid is actually browsable); All tab keeps the
+            //  old behavior of apps appearing once the user types.
+            const cap = f === "apps" ? 100 : 30
+            const shown = filteredApps.slice(0, cap)
             if (shown.length > 0) {
                 out.push({ kind: "header", label: "Applications" })
                 for (let s = 0; s < shown.length; ++s)
@@ -155,12 +174,26 @@ Item {
             Power.openSettings()
             break
         case "podman":
-            UiState.closeAll()
-            Power.openSettings("podman")
+        case "containers":
+            UiState.openPopup("containers")
             break
         case "agent":
+            UiState.openPopup("agent")
+            break
+        case "clipboard":
+            UiState.openPopup("clipboard")
+            break
+        case "quickToggles":
+            UiState.controlCenterPane = "features"
+            UiState.openPopup("controlCenter")
+            break
+        case "screenshot":
             UiState.closeAll()
-            Power.openSettings("agent")
+            Power.screenshot()
+            break
+        case "record":
+            UiState.closeAll()
+            Power.record()
             break
         case "dnd":
             Notifs.toggleDnd()
@@ -204,6 +237,7 @@ Item {
     onShownChanged: {
         if (shown) {
             query = ""
+            filter = "all"
             selected = 0
             scanApps()
             searchInput.forceActiveFocus()
@@ -326,11 +360,74 @@ Item {
             }
         }
 
+        //  ── Filter menu (r24): All / Actions / Apps ───────────────
+        //  "Apps" IS the show-apps-only menu: the whole application
+        //  grid, no palette rows, no typing needed.
+        Row {
+            width: parent.width
+            height: 26
+            spacing: 6
+
+            Repeater {
+                model: [
+                    { k: "all",     label: "All" },
+                    { k: "actions", label: "Actions" },
+                    { k: "apps",    label: "Apps" }
+                ]
+
+                delegate: Rectangle {
+                    id: chip
+                    required property var modelData
+                    readonly property bool sel: launcherCard.filter === modelData.k
+                    width: 66
+                    height: 24
+                    radius: 12
+                    color: sel ? Theme.accent : Theme.withAlpha(Theme.ink, 0.08)
+
+                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    scale: chipArea.pressed ? 0.94 : 1
+                    Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: chip.modelData.label
+                        color: chip.sel ? "#ffffff" : Theme.muted
+                        font.family: Theme.uiFont
+                        font.pixelSize: 10
+                        font.weight: chip.sel ? Font.DemiBold : Font.Medium
+                    }
+                    MouseArea {
+                        id: chipArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            launcherCard.filter = chip.modelData.k
+                            launcherCard.selected = 0
+                            launcherCard.firstSelectable()
+                        }
+                    }
+                }
+            }
+
+            Item { width: 4; height: 1 }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: launcherCard.filter === "apps"
+                    ? filteredApps.length + " apps"
+                    : (query.length > 0 ? "" : "type to search · Up/Down · Enter")
+                color: Theme.dim
+                font.family: Theme.uiFont
+                font.pixelSize: 9
+            }
+        }
+
         //  ── Palette list: virtualized rows, keyboard-followed ─────
         ListView {
             id: list
             width: parent.width
-            height: 350
+            height: 322
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             model: launcherCard.entries

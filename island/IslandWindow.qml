@@ -207,6 +207,65 @@ PanelWindow {
 
         Component.onCompleted: island.forceActiveFocus()
 
+        //  ── Swipe navigation (r24): drag left/right anywhere on the
+        //  island's empty surface (or scroll the wheel on it) to move
+        //  to the previous / next notch page. Declared FIRST so every
+        //  interactive element above keeps its clicks — this area only
+        //  sees the surface nobody else grabbed.
+        MouseArea {
+            id: swipeArea
+            anchors.fill: parent
+
+            //  Stay quiet while the HUD flashes or a banner owns the
+            //  body — swiping there would fight those morph states.
+            enabled: !islandWindow.hudActive && !islandWindow.bannerActive
+
+            property real pressX: 0
+            property real pressY: 0
+            property bool tracking: false
+
+            onPressed: (m) => {
+                pressX = m.x
+                pressY = m.y
+                tracking = true
+            }
+            onPositionChanged: (m) => {
+                if (!tracking)
+                    return
+                const dx = m.x - pressX
+                const dy = m.y - pressY
+                if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.8) {
+                    tracking = false
+                    swipeFlash.restart()
+                    UiState.cyclePopup(dx < 0 ? 1 : -1)
+                }
+            }
+            onReleased: tracking = false
+            onCanceled: tracking = false
+        }
+
+        //  Touchpad / mouse wheel on the island = page next / prev.
+        WheelHandler {
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            onWheel: (ev) => {
+                const dx = ev.angleDelta.x
+                const dy = ev.angleDelta.y
+                const d = Math.abs(dx) > Math.abs(dy) ? dx : dy
+                if (Math.abs(d) >= 120) {
+                    swipeFlash.restart()
+                    UiState.cyclePopup(d < 0 ? 1 : -1)
+                }
+            }
+        }
+
+        //  Tiny affordance: the pill briefly tilts in the swipe
+        //  direction so a page change is never silent.
+        SequentialAnimation {
+            id: swipeFlash
+            PropertyAnimation { target: island; property: "rotation"; to: -1.6; duration: 90 }
+            PropertyAnimation { target: island; property: "rotation"; to: 0; duration: 160 }
+        }
+
         //  ── Silhouette: rounded body + inverted wings ─────────────
         IslandSilhouette {
             anchors.fill: parent
@@ -627,6 +686,9 @@ PanelWindow {
                     : UiState.activePopup === "power" ? powerComp
                     : UiState.activePopup === "about" ? aboutComp
                     : UiState.activePopup === "plugins" ? pluginsComp
+                    : UiState.activePopup === "containers" ? containersComp
+                    : UiState.activePopup === "agent" ? agentComp
+                    : UiState.activePopup === "clipboard" ? clipboardComp
                     : ccComp
 
                 opacity: active ? 1 : 0
@@ -730,5 +792,20 @@ PanelWindow {
     Component {
         id: pluginsComp
         PluginsCard {}
+    }
+
+    Component {
+        id: containersComp
+        ContainersCard {}
+    }
+
+    Component {
+        id: agentComp
+        AgentCard {}
+    }
+
+    Component {
+        id: clipboardComp
+        ClipboardCard {}
     }
 }

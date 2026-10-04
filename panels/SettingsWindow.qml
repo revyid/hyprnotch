@@ -1129,11 +1129,14 @@ Window {
                 }
             }
 
+            //  r24: the apply summary is deliberately small and quiet —
+            //  it auto-clears after 8 s (Hotkeys.autoClear) and only
+            //  shouts (yellow) when something is actually wrong.
             SectionLabel { text: "STATUS"; topPadding: 10 }
 
             Rectangle {
                 width: parent.width
-                height: 46
+                height: 30
                 radius: Theme.radiusSmall
                 color: Theme.surface
 
@@ -1142,10 +1145,11 @@ Window {
                     anchors.left: parent.left
                     anchors.leftMargin: 12
                     width: parent.width - 190
-                    text: Hotkeys.lastSummary.length > 0 ? Hotkeys.lastSummary : "not applied yet"
-                    color: Hotkeys.hyprctlMissing ? Theme.yellow : Theme.muted
+                    text: Hotkeys.lastSummary.length > 0 ? Hotkeys.lastSummary : "keybinds applied at launch"
+                    color: Hotkeys.hyprctlMissing || Hotkeys.applierMissing || Hotkeys.bindsMissing
+                        ? Theme.yellow : Theme.dim
                     font.family: Theme.uiFont
-                    font.pixelSize: 10
+                    font.pixelSize: 9
                     elide: Text.ElideMiddle
                 }
                 Rectangle {
@@ -1403,7 +1407,7 @@ Window {
             }
             SliderRow {
                 title: "Background opacity"
-                sub: "the frosted bar material — also the glass fallback"
+                sub: "the frosted bar material — compositor blur sits under it"
                 from: 0; to: 1
                 decimals: 2
                 value: Config.data.dock.backgroundOpacity
@@ -1411,19 +1415,10 @@ Window {
                 onEdited: (v) => Config.set("dock.backgroundOpacity", v)
             }
             SwitchRow {
-                title: "Liquid Glass"
-                sub: "refracts the wallpaper and live windows behind the bar (falls back to frosted glass without qsb)"
-                checked: Config.data.dock.liquid
-                onFlipped: Config.set("dock.liquid", !Config.data.dock.liquid)
-            }
-            SliderRow {
-                title: "Translucency"
-                sub: "how much tint the glass adds over the refraction"
-                from: 0; to: 0.85
-                decimals: 2
-                value: Config.data.dock.glassOpacity
-                suffix: ""
-                onEdited: (v) => Config.set("dock.glassOpacity", v)
+                title: "Frosted blur"
+                sub: "compositor blur behind the frosted bar — applied when the shell starts (start.sh)"
+                checked: Config.data.dock.blur !== false
+                onFlipped: Config.set("dock.blur", Config.data.dock.blur === false)
             }
 
             SectionLabel { text: "PINNED APPS"; topPadding: 10 }
@@ -1976,10 +1971,54 @@ Window {
             width: parent ? parent.width : 0
             spacing: 8
 
-            SectionLabel { text: "AI AGENT — Hermes or any CLI chat tool" }
+            SectionLabel { text: "AI AGENT — status · usage · config" }
+
+            //  ── Status & usage (r24: the notch card is status-only, so
+            //  the full picture lives here too) ──────────────────────
+            Rectangle {
+                width: parent.width
+                height: 64
+                radius: Theme.radiusSmall
+                color: Theme.surface
+
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    spacing: 10
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 10; height: 10; radius: 5
+                        color: Agent.status === "ready" ? Theme.green
+                            : Agent.status === "running" ? Theme.accent
+                            : Agent.status === "disabled" ? Theme.dim
+                            : Theme.red
+                    }
+                    Column {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
+                        Text {
+                            text: "Status: " + Agent.status
+                            color: Theme.ink
+                            font.family: Theme.uiFont
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                        }
+                        Text {
+                            text: Agent.runs + " runs · last: "
+                                  + (Agent.lastRun.length > 0 ? Agent.lastRun : "never")
+                            color: Theme.muted
+                            font.family: Theme.uiFont
+                            font.pixelSize: 10
+                        }
+                    }
+                }
+            }
 
             SwitchRow {
                 title: "Enabled"
+                sub: "off = the notch card and every keybind politely report 'disabled'"
                 checked: Config.data.agent.enabled
                 onFlipped: Config.set("agent.enabled", !Config.data.agent.enabled)
             }
@@ -1992,10 +2031,12 @@ Window {
             }
 
             Text {
-                text: "The prompt is appended as the last argument. Output streams back here."
+                text: "The notch card for the agent is a status/usage viewer only — starting prompts is optional and lives here."
                 color: Theme.dim
                 font.family: Theme.uiFont
                 font.pixelSize: 9
+                wrapMode: Text.WordWrap
+                width: parent.width
             }
 
             Rectangle {

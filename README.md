@@ -95,18 +95,39 @@ is not.
   screen edge (reveal strip, configurable delay), and the input mask
   keeps the empty area click-through — only the bar itself is
   clickable.
-- **Dock Liquid Glass** (optional, kept from the Swift-Dock rounds) —
-  the bar can be a slab of refracting glass: the fragment shader bends
-  the wallpaper and the LIVE windows behind it — squircle bezel
-  refraction, chromatic dispersion, specular rim, grain. The shader
-  compiles once with `qsb` (qt6-shadertools) on first use and is
-  cached; without qsb the dock keeps its frosted bar automatically.
-  `start.sh` applies `layerrule` blur/ignorealpha/noanim for the
-  `hyprnotch-dock` namespace via `hyprctl keyword` (works on mainline
-  and the k4 Lua fork). Everything is tunable in Settings → Dock (size,
-  magnification amount and radius, screen edge, full length, reserve
-  space, margin, background opacity, click action, auto-hide + delay,
-  liquid glass + translucency, primary-display-only, reset pins).
+- **Dock, frosted blur (r24)** — the Liquid Glass shader was REMOVED by
+  user request: no more qsb, no shader fallback paths. The bar is a
+  translucent frosted surface blurred by the compositor — `start.sh`
+  applies `layerrule` blur/ignorealpha/noanim for the `hyprnotch-dock`
+  namespace via `hyprctl keyword` (works on mainline and the k4 Lua
+  fork), and `dock.blur` toggles it. Everything else is tunable in
+  Settings → Dock (size, magnification amount and radius, screen edge,
+  full length, reserve space, margin, background opacity, click action,
+  auto-hide + delay, primary-display-only, reset pins).
+- **Swipe the notch (r24)** — drag the island's surface left/right (or
+  roll the wheel over it) to move through the page deck: control
+  center → notifications → calendar → launcher → stats → weather →
+  wallpaper → containers → agent → clipboard → power → about →
+  plugins. Switched-off features are skipped, never dead ends. The
+  pill tilts a degree in the swipe direction so a page change is
+  never silent.
+- **Quick toggles (r24)** — the per-feature enable/disable switches now
+  live INSIDE the notch: Control Center → System → Quick Toggles (or
+  Super+A). Control Center, Launcher, Notifications, Calendar,
+  Weather, Containers, AI Agent, Clipboard, Plugins, Dock, HUD, Peek
+  and Tasks — one switch each, same config keys as Settings, every
+  gate (keybinds, swipe deck, launcher, IPC) reacts instantly.
+- **Clipboard history (r24, Win+V)** — cliphist-backed panel in the
+  notch: search, click-to-recopy, delete single entries, wipe all.
+  `start.sh` launches the `wl-paste --watch cliphist store` daemon;
+  without cliphist/wl-clipboard the panel shows an honest install
+  hint. Chord: Super+V.
+- **Screenshot & recording (r24)** — Print shoots a region (grimblast →
+  grim+slurp → grim full-screen fallback chain) and Shift+Print
+  toggles wf-recorder with timestamped files in `~/Videos`. Both give
+  toast feedback, and missing tools are REPORTED instead of failing
+  silently ("record kenapa ga works ya" — because wf-recorder wasn't
+  installed, and nobody told you).
 - **Notifications (HyprNotch IS the daemon)** — Quickshell's
   NotificationServer claims org.freedesktop.Notifications, so banners
   render INSIDE the island window under the pill: app icon, summary, body,
@@ -118,14 +139,17 @@ is not.
 - **HUD (inside the pill)** — volume/brightness morph state, driven from
   any source (keys, scrolls, other apps).
 - **Launcher = command palette (inside the island)** — opens on
-  **Super+Space** (rebindable in Settings → Keybinds). One search box
-  over EVERYTHING: every island action (control center, calendar,
+  **Super+Space** (rebindable in Settings → Keybinds). A filter menu on
+  top — **All / Actions / Apps** ("di launcher ada menu untuk show app
+  aja"; the Apps tab is the plain application grid) — then one search
+  box over EVERYTHING: every island action (control center, calendar,
   notifications, weather, stats, wallpaper, power, about, plugins,
-  settings, DND, containers, night light, dock, plugin reload,
-  keybind re-apply) plus all installed apps with real icons. Each
-  action row shows its live chord from Settings → Keybinds. Arrow
-  keys / PageUp / PageDown move, Enter runs, Esc closes — the whole
-  notch is drivable without touching the mouse.
+  settings, DND, containers, agent status, clipboard, screenshot,
+  record, quick toggles, night light, dock, plugin reload, keybind
+  re-apply) plus all installed apps with real icons. Each action row
+  shows its live chord from Settings → Keybinds. Arrow keys / PageUp /
+  PageDown move, Enter runs, Esc closes — the whole notch is drivable
+  without touching the mouse.
 - **Plugins** — drop a `.qml` file into `plugins/` and the island gains a
   peek chip + a full view. Two samples included (Pomodoro, Notes). See
   `plugins/README.md` for the 6-property contract and the service API
@@ -182,14 +206,21 @@ bind = SUPER, T, exec, $notch stats           # system stats
 bind = SUPER, G, exec, $notch wallpaper       # wallpaper picker
 bind = SUPER, I, exec, $notch about           # about this machine
 bind = SUPER, O, exec, $notch plugins         # plugin menu
+bind = SUPER, V, exec, $notch clipboard       # clipboard history (Win+V)
+bind = , PRINT, exec, $notch screenshot       # screenshot (region)
+bind = SHIFT, PRINT, exec, $notch record      # screen recording
+bind = SUPER, U, exec, $notch containers      # containers panel
+bind = SUPER, Y, exec, $notch agent           # AI agent status
+bind = SUPER, A, exec, $notch features        # quick toggles pane
 ```
 
 Every view is also reachable via IPC (note the `ipc` subcommand — without
 it the command silently does nothing):
 `quickshell ipc -p ~/.config/quickshell/hyprnotch/shell.qml call notch <name>` —
 names: `controlCenter`, `calendar`, `notifications`, `launcher`, `weather`,
-`stats`, `wallpaper`, `power`, `about`, `settings`, `dnd`, `nightLight`,
-`podman`, `agent`, `reloadPlugins`, `applyKeys`, `closeAll`.
+`stats`, `wallpaper`, `power`, `about`, `containers`, `agent`, `clipboard`,
+`features`, `screenshot`, `record`, `settings`, `dnd`, `nightLight`,
+`reloadPlugins`, `applyKeys`, `closeAll`.
 
 ## Configuration
 
@@ -199,8 +230,8 @@ Notable keys: `island.maxVisibleWorkspaces`, `island.peekEnabled`,
 managed live from the dock: right-click → Add Application / Remove,
 drag to reorder), `dock.autoHide`, `dock.position` (bottom / top /
 left / right), `dock.magnification` + `dock.magnificationRadius`,
-`dock.clickAction` (focus-or-launch / launch), `dock.liquid`,
-`dock.glassOpacity`,
+`dock.clickAction` (focus-or-launch / launch), `dock.blur` (frosted
+compositor blur, default true), `clipboard.enabled`,
 `plugins.disabled`, `quickActions`, `controlCenter.sections`,
 `hypr.luaDispatch` (default `true` — quote dispatch args for the k4 Lua
 fork; set to `false` on mainline Hyprland).

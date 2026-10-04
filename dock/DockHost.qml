@@ -44,8 +44,6 @@ Item {
         autoHide: cfg.autoHide === true,
         hideDelay: num(cfg.hideDelay, 800),
         clickAction: typeof cfg.clickAction === "string" ? cfg.clickAction : "focus-or-launch",
-        liquid: cfg.liquid === true,
-        glassOpacity: num(cfg.glassOpacity, 0.42),
         pinned: pins()
     })
 

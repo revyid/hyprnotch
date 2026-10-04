@@ -38,7 +38,13 @@ Item {
     //     list is actually on screen.
     property bool shown: UiState.activePopup === "controlCenter"
     onShownChanged: {
-        if (!shown) {
+        if (shown) {
+            //  Opened from the pill / a keybind / IPC / the launcher:
+            //  honor the pane the opener asked for (the Quick Toggles
+            //  keybind sets controlCenterPane = "features").
+            pane = UiState.controlCenterPane
+            UiState.controlCenterPane = "main"
+        } else {
             pane = "main"
             Net.scanning = false
             Bluetooth.discoveryWanted = false
@@ -1336,7 +1342,11 @@ Item {
                         Layout.fillWidth: true
                         height: 48
                         radius: Theme.radiusTile
-                        color: qaArea.containsMouse ? Theme.surfaceHi : Theme.track
+                        color: qaArea.containsMouse ? Theme.surfaceHi
+                            : (modelData.builtin === "dnd" && Notifs.dnd
+                               || modelData.builtin === "night" && Power.nightActive
+                               || modelData.builtin === "record" && Power.recording)
+                              ? Theme.withAlpha(Theme.accent, 0.14) : Theme.track
 
                         scale: qaArea.pressed ? 0.95 : 1
                         Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
@@ -1529,6 +1539,137 @@ Item {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    //  ══════════════════════════════════════════════════════════════
+    //  FEATURES PANE (r24) — the per-feature enable/disable switches,
+    //  now a menu INSIDE the notch ("buat jadi di menu mana gitu dong,
+    //  atau toggle"). Every switch writes the same config keys the
+    //  old Settings-only toggles used, and every reader (UiState
+    //  gates, Notifs, Podman, Agent, dock, HUD) reacts instantly.
+    //  ══════════════════════════════════════════════════════════════
+
+    Component {
+        id: featuresComp
+
+        Column {
+            width: parent ? parent.width : 0
+            spacing: 6
+
+            Text {
+                width: parent.width
+                text: "Switch whole features on or off. Off means the pill zone, the keybind, the swipe deck and the launcher all skip it."
+                color: Theme.dim
+                font.family: Theme.uiFont
+                font.pixelSize: 9
+                wrapMode: Text.WordWrap
+            }
+
+            Repeater {
+                model: [
+                    { key: "controlCenter.enabled",  glyph: Icons.sliders,   label: "Control Center" },
+                    { key: "launcher.enabled",       glyph: Icons.search,    label: "Launcher (Win+Space)" },
+                    { key: "notifications.enabled",  glyph: Icons.bell,      label: "Notifications" },
+                    { key: "calendar.enabled",       glyph: Icons.calendar,  label: "Calendar" },
+                    { key: "island.showWeather",     glyph: Icons.cloud,     label: "Weather" },
+                    { key: "podman.enabled",         glyph: Icons.cubes,     label: "Containers (podman)" },
+                    { key: "agent.enabled",          glyph: Icons.robot,     label: "AI Agent" },
+                    { key: "clipboard.enabled",      glyph: "\uF0EA",       label: "Clipboard History" },
+                    { key: "plugins.enabled",        glyph: Icons.cubes,     label: "Plugins" },
+                    { key: "dock.enabled",           glyph: Icons.desktop,   label: "Dock" },
+                    { key: "hud.enabled",            glyph: Icons.volumeHigh,label: "Volume / Brightness HUD" },
+                    { key: "island.peekEnabled",     glyph: Icons.mouseIcon, label: "Hover Peek" },
+                    { key: "tasks.enabled",          glyph: Icons.tasks,     label: "Tasks" }
+                ]
+
+                delegate: Rectangle {
+                    id: featRow
+                    required property var modelData
+                    width: parent ? parent.width : 0
+                    height: 34
+                    radius: 8
+                    color: Theme.withAlpha(Theme.ink, 0.06)
+
+                    readonly property bool on: Config.get(modelData.key, true)
+
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        anchors.leftMargin: 10
+                        spacing: 9
+
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 20; height: 20; radius: 6
+                            color: Theme.withAlpha(Theme.accent, 0.15)
+                            Glyph {
+                                anchors.centerIn: parent
+                                size: 10
+                                colorVal: Theme.accent
+                                glyph: featRow.modelData.glyph
+                            }
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: featRow.modelData.label
+                            color: Theme.ink
+                            font.family: Theme.uiFont
+                            font.pixelSize: 11
+                        }
+                    }
+
+                    //  ── the switch ────────────────────────────────
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        anchors.rightMargin: 10
+                        width: 34
+                        height: 20
+                        radius: 10
+                        color: featRow.on ? Theme.accent : Theme.withAlpha(Theme.ink, 0.18)
+
+                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: featRow.on ? parent.width - width - 2 : 2
+                            width: 16
+                            height: 16
+                            radius: 8
+                            color: "#ffffff"
+
+                            Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Config.set(featRow.modelData.key, !featRow.on)
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        z: -1
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Config.set(featRow.modelData.key, !featRow.on)
+                    }
+                }
+            }
+
+            //  Escape hatch: if the user switches off the control
+            //  center while standing in it, the pill closes; tell them
+            //  how to get back BEFORE they do it.
+            Text {
+                width: parent.width
+                text: "Closed the Control Center by accident? Launcher (Super+Space) → Control Center, or Super+C, reopens it."
+                color: Theme.dim
+                font.family: Theme.uiFont
+                font.pixelSize: 9
+                wrapMode: Text.WordWrap
             }
         }
     }

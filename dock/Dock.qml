@@ -25,15 +25,15 @@ import Quickshell.Wayland
 //      "Dock Settings" in the menu opens Settings → Dock
 //    · the window is a full-length strip on the bar axis (upstream:
 //      a compact window).  The BAR keeps upstream's exact compact
-//      geometry — the strip exists so the Liquid Glass backdrop math
-//      (screen-origin mapping) stays exact on every position, and so
-//      the input mask below can make the empty area click-through
+//      geometry — the strip exists so the input mask below can make
+//      the empty area click-through
 //    · input mask = the bar + magnification headroom instead of the
 //      whole window — clicks pass through the empty strip (upstream
 //      eats the whole band above the bar)
-//    · optional Liquid Glass refraction behind the bar (Swift-Dock
-//      technique kept from r19/r20: dock/GlassSurface.qml +
-//      dock/liquidglass.frag); frosted fallback without qsb
+//    · frosted-blur material (r24): the Liquid Glass shader was
+//      removed by user request — the bar is translucent and the
+//      compositor blurs it (layerrule blur on namespace
+//      hyprnotch-dock, applied in start.sh / togglable in Settings)
 //    · hideDelay is configurable (upstream: fixed 800 ms)
 //  ─────────────────────────────────────────────────────────────────
 
@@ -83,8 +83,6 @@ PanelWindow {
   readonly property int crossExtent: vertical
     ? Math.ceil(iconSize * magnification + 80) + edgeMargin
     : Math.ceil(iconSize * magnification + 48) + edgeMargin
-  readonly property bool liquid: settings.liquid === true
-  readonly property real glassTint: settings.glassOpacity === undefined ? 0.42 : settings.glassOpacity
   readonly property bool keepAutoHideOpen: windowPointer.hovered
     || appPicker.visible || openMenuCount > 0 || dragSource >= 0
   readonly property bool dockShown: !autoHide || autoHideRevealed
@@ -211,7 +209,7 @@ PanelWindow {
     width: root.vertical ? root.iconSize + 24 : dockLayout.implicitWidth + root.mainPadding * 2
     height: root.vertical ? dockLayout.implicitHeight + root.mainPadding * 2 : root.iconSize + 24
     radius: 20
-    color: glassFx.ready ? "transparent" : Qt.rgba(0.08, 0.09, 0.11, root.backgroundOpacity)
+    color: Qt.rgba(0.08, 0.09, 0.11, root.backgroundOpacity)
     border.width: 1
     border.color: Qt.rgba(1, 1, 1, 0.18)
     transform: Translate {
@@ -237,28 +235,6 @@ PanelWindow {
       color: "transparent"
       border.width: 1
       border.color: Qt.rgba(0, 0, 0, 0.28)
-      visible: !glassFx.ready
-    }
-
-    //  ── Liquid Glass: real-time refraction of the backdrop behind the
-    //  bar (Swift-Dock technique kept from r19/r20).  Centered on the
-    //  bar with padPx overhang — the GlassSurface geometry contract.
-    GlassSurface {
-      id: glassFx
-
-      anchors.centerIn: parent
-      backdropItem: glassBackdrop.item
-      glassX: dockBackground.x
-      glassY: dockBackground.y
-      glassW: dockBackground.width
-      glassH: dockBackground.height
-      winScreenX: root.vertical && root.position === "right"
-        ? root.screen.width - root.width : 0
-      winScreenY: root.position === "bottom"
-        ? root.screen.height - root.height : 0
-      radius: dockBackground.radius
-      tint: root.glassTint
-      active: root.liquid
     }
 
     Grid {
@@ -316,26 +292,6 @@ PanelWindow {
 
     HoverHandler {
       id: pointer
-    }
-  }
-
-  //  ── Liquid Glass backdrop: wallpaper + the live windows behind the
-  //  dock, in screen coordinates (per-window captures, never a screen
-  //  grab — the dock can't refract itself).  Hosted at the SCREEN
-  //  origin; see dock/GlassBackdrop.qml. ─────────────────────────────
-  Loader {
-    id: glassBackdrop
-
-    active: glassFx.ready
-    sourceComponent: GlassBackdrop {
-      x: -glassFx.winScreenX
-      y: -glassFx.winScreenY
-      screenW: root.screen.width
-      screenH: root.screen.height
-      screenName: root.screen.name || ""
-      zoneTop: root.position === "bottom"
-        ? root.screen.height - root.height - 48 : 0
-      live: glassFx.ready && root.dockShown
     }
   }
 

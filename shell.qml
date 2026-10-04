@@ -33,6 +33,7 @@ ShellRoot {
         void Power.profileAvailable
         void Wallpaper.available
         void Hotkeys.map
+        void Clipboard.available
         console.log("[HyprNotch] started — config:", Config.filePath)
     }
 
@@ -65,13 +66,26 @@ ShellRoot {
         function power(): void         { UiState.togglePopup("power") }
         function about(): void         { UiState.togglePopup("about") }
         function plugins(): void       { UiState.togglePopup("plugins") }
+        function containers(): void    { UiState.togglePopup("containers") }
+        function agent(): void         { UiState.togglePopup("agent") }
+        function clipboard(): void     { UiState.togglePopup("clipboard") }
+        function features(): void {
+            UiState.controlCenterPane = "features"
+            UiState.openPopup("controlCenter")
+        }
+        //  alias: the quickToggles keybind action id resolves to the same pane
+        function quickToggles(): void {
+            UiState.controlCenterPane = "features"
+            UiState.openPopup("controlCenter")
+        }
+        function screenshot(): void    { Power.screenshot() }
+        function record(): void        { Power.record() }
         function settings(): void      { Power.openSettings() }
         function settingsPage(page: string): void { Power.openSettings(page) }
         function dock(): void          { Config.set("dock.enabled", !Config.data.dock.enabled) }
         function dnd(): void           { Notifs.toggleDnd() }
         function nightLight(): void    { Power.toggleNight() }
-        function podman(): void        { Power.openSettings("podman") }
-        function agent(): void         { Power.openSettings("agent") }
+        function podman(): void        { UiState.togglePopup("containers") }
         function reloadPlugins(): void { Plugins.reload() }
         function applyKeys(): void     { Hotkeys.apply() }
     }

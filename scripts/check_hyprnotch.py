@@ -89,6 +89,10 @@ v18 — hyprland-dock (nick-friedrich) port: the dock now uses surfaces
   whitelists.  (Catches: unimported IconImage — "unresolved type" or a
   load-time 'IconImage is not a type' cascade like r16.)
 
+v20 — REQUIRED_MODULE += WheelHandler (QtQuick; used by the r24 swipe
+     navigation on the island). Shaders are gone from the repo (r24
+     removed Liquid Glass) so the shader pass is a no-op now, kept for
+     safety.
 v19 — runtime-warning round from the r21 start log (the config finally
   loaded, but the console was noisy and two features silently
   degraded):
@@ -168,6 +172,7 @@ REQUIRED_MODULE = {
     "TextArea": "QtQuick.Controls", "ScrollBar": "QtQuick.Controls",
     "HoverHandler": "QtQuick", "TapHandler": "QtQuick",
     "ScrollIndicator": "QtQuick.Controls",
+    "WheelHandler": "QtQuick",
     "RotationAnimation": "QtQuick", "Translate": "QtQuick",
     "Region": "Quickshell",
     "Button": "QtQuick.Controls", "ComboBox": "QtQuick.Controls",
@@ -1186,7 +1191,7 @@ def main():
                       f"fragColor)")
                 failures += 1
 
-    print(f"Checked {len(files)} QML files + {len(shader_files)} shaders (v19)")
+    print(f"Checked {len(files)} QML files + {len(shader_files)} shaders (v20)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

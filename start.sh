@@ -58,33 +58,6 @@ else
     echo "[HyprNotch] build $BUILD (installed copy)"
 fi
 
-#  ── Liquid Glass shader (pre-compile) ────────────────────────────
-#  The dock's Liquid Glass needs Qt's qsb tool to compile the .frag
-#  into a .qsb. Compile it HERE so the very first frame already has
-#  glass, and say it plainly when the tool is missing — r22 shipped a
-#  silent frosted-glass fallback that looked like "shaders ga fungsi".
-QSB_BIN=""
-for q in qsb qsb6 qsb-qt6 /usr/lib/qt6/bin/qsb /usr/lib64/qt6/bin/qsb /usr/lib/qt/bin/qsb; do
-    if command -v "$q" >/dev/null 2>&1 || [ -x "$q" ]; then
-        QSB_BIN="$(command -v "$q" 2>/dev/null || echo "$q")"
-        break
-    fi
-done
-FRAG="$INSTALLED/dock/liquidglass.frag"
-QSB_OUT="$INSTALLED/dock/liquidglass.frag.qsb"
-if [ -f "$FRAG" ]; then
-    if [ -n "$QSB_BIN" ]; then
-        if "$QSB_BIN" --qt6 -o "$QSB_OUT" "$FRAG" >/dev/null 2>&1; then
-            echo "[HyprNotch] Liquid Glass shader compiled OK (qsb)"
-        else
-            rm -f "$QSB_OUT" 2>/dev/null
-            echo "[HyprNotch] WARNING: qsb rejected the Liquid Glass shader — dock falls back to frosted glass"
-        fi
-    else
-        echo "[HyprNotch] qsb not found — dock uses frosted glass (install qt6-shadertools for Liquid Glass)"
-    fi
-fi
-
 #  ── Keybinds are NOT registered here anymore ─────────────────────
 #  Since r15 the shell itself owns its chords: services/Hotkeys.qml
 #  applies the map edited in Settings → Keybinds ~1.5 s after launch
@@ -95,10 +68,23 @@ fi
 #  After a manual `hyprctl reload`, re-apply without relaunching:
 #    quickshell ipc -p <installed>/shell.qml call notch applyKeys
 
+#  ── Clipboard history daemon (cliphist, r24) ─────────────────────
+#  The notch's clipboard panel reads cliphist's history. The store
+#  daemon must run from session start for anything to be captured.
+if command -v wl-paste >/dev/null 2>&1 && command -v cliphist >/dev/null 2>&1; then
+    if ! pgrep -f "wl-paste --watch cliphist store" >/dev/null 2>&1; then
+        nohup wl-paste --watch cliphist store >/dev/null 2>&1 &
+        echo "[HyprNotch] clipboard history daemon started (wl-paste --watch cliphist store)"
+    fi
+else
+    echo "[HyprNotch] cliphist/wl-paste not found — the clipboard panel will show install hints (wl-clipboard + cliphist)"
+fi
+
 #  ── Dock layer rules ─────────────────────────────────────────────
 #  Runtime layer rules for the dock surface (namespace hyprnotch-dock):
-#  compositor blur + hairline alpha handling under the frosted fallback,
-#  no open/close animation (the dock animates itself). Applied via
+#  compositor blur (the frosted material, r24 — the Liquid Glass shader
+#  was removed by user request) + hairline alpha handling + no
+#  open/close animation (the dock animates itself). Applied via
 #  `hyprctl keyword` so it works identically on mainline hyprland.conf
 #  and the k4 Lua fork, and can never break a config parse. A manual
 #  `hyprctl reload` clears them — restart the shell to re-apply.
@@ -107,7 +93,9 @@ fi
 #    layerrule = ignorealpha 0.2, hyprnotch-dock
 #    layerrule = noanim, hyprnotch-dock
 if command -v hyprctl >/dev/null 2>&1; then
-    hyprctl keyword layerrule "blur, hyprnotch-dock" >/dev/null 2>&1 || true
+    if [ "$(cat "$HOME/.config/hyprnotch/config.json" 2>/dev/null | tr -d '[:space:]' | grep -o '"blur":false' )" = "" ]; then
+        hyprctl keyword layerrule "blur, hyprnotch-dock" >/dev/null 2>&1 || true
+    fi
     hyprctl keyword layerrule "ignorealpha 0.2, hyprnotch-dock" >/dev/null 2>&1 || true
     hyprctl keyword layerrule "noanim, hyprnotch-dock" >/dev/null 2>&1 || true
 fi
