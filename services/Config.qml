@@ -24,7 +24,7 @@ Singleton {
         general: {
             accent: "#0a84ff",
             animations: true,
-            cfgVersion: 4
+            cfgVersion: 5
         },
         island: {
             enabled: true,
@@ -66,28 +66,27 @@ Singleton {
         ],
         dock: {
             enabled: true,
-            //  Swift-Dock behavior model (port of 0-ss/Swift-Dock):
-            //  smart = hide only while a tiled window needs the space,
-            //  always = classic auto-hide, never = visible + reserves space.
-            hideMode: "smart",
-            hideDelay: 450,
-            iconSize: 52,
-            magnification: 1.7,
-            magnify: true,
-            spacing: 6,
-            edgeMargin: 6,
-            cornerRadius: 18,
-            showLabels: true,
-            showIndicators: true,
-            bounce: true,
-            showTrash: true,
-            showThumbs: true,
+            //  nick-friedrich/hyprland-dock behavior model (port):
+            //  autoHide = hide until the pointer touches the screen edge
+            //  (toggle also lives in the dock's right-click menu),
+            //  reserveSpace = tiled windows stop beside the dock.
+            autoHide: false,
+            hideDelay: 800,
+            iconSize: 42,
+            magnification: 1.2,
+            magnificationRadius: 95,
+            margin: 10,
+            backgroundOpacity: 0.88,
+            position: "bottom",
+            fullLength: false,
+            reserveSpace: true,
+            clickAction: "focus-or-launch",
             liquid: true,
             glassOpacity: 0.42,
             primaryOnly: false,
             //  .desktop ids — unknown ids are skipped, so this list is
             //  safe on any machine.  Managed live from the dock itself
-            //  (right-click → Keep in Dock, drag to reorder).
+            //  (right-click → Add Application / Remove, drag to reorder).
             pinned: [
                 "org.gnome.Nautilus", "org.kde.dolphin", "thunar",
                 "firefox", "zen", "chromium", "google-chrome",
@@ -238,6 +237,12 @@ Singleton {
         //  v4: the dock became the Swift-Dock port — hideMode replaces the
         //      autoHide flag, and pins are .desktop id strings (legacy
         //      {label,glyph,command} pins are dropped for Swift-Dock's set).
+        //  v5: the dock became the hyprland-dock (nick-friedrich) port —
+        //      hideMode collapses back into the autoHide flag (smart and
+        //      always map to true, never to false) and edgeMargin renames
+        //      to margin.  The Swift-Dock-only knobs (spacing, cornerRadius,
+        //      labels/indicators/bounce/trash/thumbs, magnify) are no longer
+        //      read — stale keys simply sit unused in the file.
         const ver = (disk && disk.general && disk.general.cfgVersion) || 1
         if (ver < 2) {
             data.dock.enabled = true
@@ -262,7 +267,21 @@ Singleton {
             else
                 data.dock.pinned = cleanPins
         }
-        data.general.cfgVersion = 4
+        if (ver < 5) {
+            data.dock.autoHide = data.dock.hideMode !== "never"
+            if (typeof data.dock.edgeMargin === "number")
+                data.dock.margin = Math.max(0, Math.min(60, data.dock.edgeMargin))
+            if (typeof data.dock.iconSize !== "number")
+                data.dock.iconSize = 42
+            const v5pins = Array.isArray(data.dock.pinned)
+                ? data.dock.pinned.filter(function (p) { return typeof p === "string" })
+                : []
+            if (v5pins.length === 0)
+                data.dock.pinned = JSON.parse(JSON.stringify(defaults.dock.pinned))
+            else
+                data.dock.pinned = v5pins
+        }
+        data.general.cfgVersion = 5
         loaded = true
         Theme.accent = data.general.accent || "#0a84ff"
     }

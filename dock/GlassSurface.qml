@@ -22,6 +22,10 @@ import "../services"
 //
 //  Geometry contract: the host places this Item OVER the glass rect at
 //  (-padPx, -padPx); it sizes itself glassW+2*padPx × glassH+2*padPx.
+//  winScreenX/Y are the dock WINDOW's offset inside the monitor — the
+//  shader needs the glass rect in SCREEN coordinates (the backdrop is
+//  screen-aligned), and window coords alone are not enough when the
+//  window is not bottom-anchored (hyprnotch supports all 4 edges).
 
 Item {
     id: glass
@@ -32,8 +36,8 @@ Item {
     property real glassY: 0
     property real glassW: 0
     property real glassH: 0
-    property real screenH: 0             // monitor height (backdrop offset)
-    property real winH: 0                // dock window height
+    property real winScreenX: 0          // window offset inside the monitor
+    property real winScreenY: 0
     property real radius: 24
     property bool active: false          // master switch from the dock
 
@@ -106,8 +110,9 @@ Item {
         live: glass.ready && glass.active
         sourceItem: glass.backdropItem
         sourceRect: Qt.rect(
-            glass.glassX - glass.padPx - glass.margin,
-            glass.glassY + (glass.screenH - glass.winH)
+            glass.glassX + glass.winScreenX
+                - glass.padPx - glass.margin,
+            glass.glassY + glass.winScreenY
                 - glass.padPx - glass.margin,
             glass.glassW + 2 * (glass.padPx + glass.margin),
             glass.glassH + 2 * (glass.padPx + glass.margin))

@@ -1193,7 +1193,7 @@ Window {
         }
     }
 
-    //  ── Dock — the Swift-Dock port ────────────────────────────────
+    //  ── Dock — the hyprland-dock port ──────────────────────────────
     Component {
         id: dockPage
 
@@ -1201,7 +1201,7 @@ Window {
             width: parent ? parent.width : 0
             spacing: 8
 
-            SectionLabel { text: "DOCK — macOS dock by 0-ss/Swift-Dock, ported" }
+            SectionLabel { text: "DOCK — hyprland-dock by nick-friedrich, ported" }
 
             SwitchRow {
                 title: "Enabled"
@@ -1212,69 +1212,11 @@ Window {
 
             SectionLabel { text: "AUTO-HIDE"; topPadding: 10 }
 
-            //  Hide mode — three-way segmented control (Swift-Dock's
-            //  Smart / Always / Never)
-            Rectangle {
-                width: parent ? parent.width : 0
-                height: 46
-                radius: Theme.radiusSmall
-                color: Theme.surface
-
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.left: parent.left
-                    anchors.leftMargin: 12
-                    text: "Hide mode"
-                    color: Theme.ink
-                    font.family: Theme.uiFont
-                    font.pixelSize: 12
-                }
-                Row {
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.right: parent.right
-                    anchors.rightMargin: 12
-                    spacing: 4
-
-                    Repeater {
-                        model: [
-                            { k: "smart",  label: "Smart" },
-                            { k: "always", label: "Always" },
-                            { k: "never",  label: "Never" }
-                        ]
-                        delegate: Rectangle {
-                            id: segCell
-                            required property var modelData
-                            readonly property bool sel:
-                                Config.data.dock.hideMode === segCell.modelData.k
-                            width: 62; height: 26
-                            radius: 6
-                            color: sel ? Theme.accent : Theme.track
-                            Behavior on color { ColorAnimation { duration: 140 } }
-                            Text {
-                                anchors.centerIn: parent
-                                text: parent.modelData.label
-                                color: parent.sel ? "#ffffff" : Theme.muted
-                                font.family: Theme.uiFont
-                                font.pixelSize: 11
-                                font.weight: parent.sel ? Font.DemiBold : Font.Normal
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: Config.set("dock.hideMode", segCell.modelData.k)
-                            }
-                        }
-                    }
-                }
-            }
-            Text {
-                width: parent ? parent.width : 0
-                text: "Smart hides only while a tiled window needs the space — Always is classic auto-hide, Never keeps the dock visible and reserves screen space."
-                color: Theme.dim
-                font.family: Theme.uiFont
-                font.pixelSize: 10
-                wrapMode: Text.WordWrap
-                leftPadding: 12
+            SwitchRow {
+                title: "Auto-hide"
+                sub: "hide until the pointer touches the screen edge — toggle also lives in the dock's right-click menu"
+                checked: Config.data.dock.autoHide
+                onFlipped: Config.set("dock.autoHide", !Config.data.dock.autoHide)
             }
             SliderRow {
                 title: "Hide delay"
@@ -1292,47 +1234,143 @@ Window {
 
             SectionLabel { text: "BEHAVIOR"; topPadding: 10 }
 
-            SwitchRow {
-                title: "Magnify on hover"
-                sub: "cosine pointer-follow wave, like the real dock"
-                checked: Config.data.dock.magnify
-                onFlipped: Config.set("dock.magnify", !Config.data.dock.magnify)
+            //  Click action — upstream focus-or-launch vs always launch
+            Rectangle {
+                width: parent ? parent.width : 0
+                height: 46
+                radius: Theme.radiusSmall
+                color: Theme.surface
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    text: "Click action"
+                    color: Theme.ink
+                    font.family: Theme.uiFont
+                    font.pixelSize: 12
+                }
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 12
+                    spacing: 4
+
+                    Repeater {
+                        model: [
+                            { k: "focus-or-launch", label: "Focus or launch" },
+                            { k: "launch",          label: "Always launch" }
+                        ]
+                        delegate: Rectangle {
+                            id: clickSeg
+                            required property var modelData
+                            readonly property bool sel:
+                                Config.data.dock.clickAction === clickSeg.modelData.k
+                            width: 116; height: 26
+                            radius: 6
+                            color: sel ? Theme.accent : Theme.track
+                            Behavior on color { ColorAnimation { duration: 140 } }
+                            Text {
+                                anchors.centerIn: parent
+                                text: parent.modelData.label
+                                color: parent.sel ? "#ffffff" : Theme.muted
+                                font.family: Theme.uiFont
+                                font.pixelSize: 10
+                                font.weight: parent.sel ? Font.DemiBold : Font.Normal
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: Config.set("dock.clickAction", clickSeg.modelData.k)
+                            }
+                        }
+                    }
+                }
             }
             SliderRow {
                 title: "Magnification amount"
-                from: 1.1; to: 2.5
+                from: 1.0; to: 2.5
                 decimals: 2
                 value: Config.data.dock.magnification
-                suffix: "×"
+                suffix: "\u00d7"
                 onEdited: (v) => Config.set("dock.magnification", v)
             }
-            SwitchRow {
-                title: "Show labels"
-                sub: "app name tooltip on hover"
-                checked: Config.data.dock.showLabels
-                onFlipped: Config.set("dock.showLabels", !Config.data.dock.showLabels)
+            SliderRow {
+                title: "Magnification radius"
+                sub: "distance over which nearby icons magnify"
+                from: 40; to: 220
+                value: Config.data.dock.magnificationRadius
+                suffix: " px"
+                onEdited: (v) => Config.set("dock.magnificationRadius", Math.round(v))
+            }
+
+            SectionLabel { text: "POSITION"; topPadding: 10 }
+
+            Rectangle {
+                width: parent ? parent.width : 0
+                height: 46
+                radius: Theme.radiusSmall
+                color: Theme.surface
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    text: "Screen edge"
+                    color: Theme.ink
+                    font.family: Theme.uiFont
+                    font.pixelSize: 12
+                }
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 12
+                    spacing: 4
+
+                    Repeater {
+                        model: [
+                            { k: "left",   label: "Left" },
+                            { k: "bottom", label: "Bottom" },
+                            { k: "right",  label: "Right" },
+                            { k: "top",    label: "Top" }
+                        ]
+                        delegate: Rectangle {
+                            id: posSeg
+                            required property var modelData
+                            readonly property bool sel:
+                                Config.data.dock.position === posSeg.modelData.k
+                            width: 56; height: 26
+                            radius: 6
+                            color: sel ? Theme.accent : Theme.track
+                            Behavior on color { ColorAnimation { duration: 140 } }
+                            Text {
+                                anchors.centerIn: parent
+                                text: parent.modelData.label
+                                color: parent.sel ? "#ffffff" : Theme.muted
+                                font.family: Theme.uiFont
+                                font.pixelSize: 11
+                                font.weight: parent.sel ? Font.DemiBold : Font.Normal
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: Config.set("dock.position", posSeg.modelData.k)
+                            }
+                        }
+                    }
+                }
             }
             SwitchRow {
-                title: "Running indicators"
-                sub: "dots under open apps"
-                checked: Config.data.dock.showIndicators
-                onFlipped: Config.set("dock.showIndicators", !Config.data.dock.showIndicators)
+                title: "Full length"
+                sub: "stretch the dock along the whole screen edge"
+                checked: Config.data.dock.fullLength
+                onFlipped: Config.set("dock.fullLength", !Config.data.dock.fullLength)
             }
             SwitchRow {
-                title: "Bounce while launching"
-                checked: Config.data.dock.bounce
-                onFlipped: Config.set("dock.bounce", !Config.data.dock.bounce)
-            }
-            SwitchRow {
-                title: "Window previews"
-                sub: "open windows appear as live cells next to the Trash"
-                checked: Config.data.dock.showThumbs
-                onFlipped: Config.set("dock.showThumbs", !Config.data.dock.showThumbs)
-            }
-            SwitchRow {
-                title: "Show Trash"
-                checked: Config.data.dock.showTrash
-                onFlipped: Config.set("dock.showTrash", !Config.data.dock.showTrash)
+                title: "Reserve screen space"
+                sub: "tiled windows stop beside the dock — auto-hidden docks always overlay"
+                checked: Config.data.dock.reserveSpace
+                onFlipped: Config.set("dock.reserveSpace", !Config.data.dock.reserveSpace)
             }
 
             SectionLabel { text: "APPEARANCE"; topPadding: 10 }
@@ -1345,29 +1383,24 @@ Window {
                 onEdited: (v) => Config.set("dock.iconSize", Math.round(v))
             }
             SliderRow {
-                title: "Icon spacing"
-                from: 0; to: 20
-                value: Config.data.dock.spacing
-                suffix: " px"
-                onEdited: (v) => Config.set("dock.spacing", Math.round(v))
-            }
-            SliderRow {
                 title: "Distance from screen edge"
                 from: 0; to: 40
-                value: Config.data.dock.edgeMargin
+                value: Config.data.dock.margin
                 suffix: " px"
-                onEdited: (v) => Config.set("dock.edgeMargin", Math.round(v))
+                onEdited: (v) => Config.set("dock.margin", Math.round(v))
             }
             SliderRow {
-                title: "Corner radius"
-                from: 0; to: 32
-                value: Config.data.dock.cornerRadius
-                suffix: " px"
-                onEdited: (v) => Config.set("dock.cornerRadius", Math.round(v))
+                title: "Background opacity"
+                sub: "the frosted bar material — also the glass fallback"
+                from: 0; to: 1
+                decimals: 2
+                value: Config.data.dock.backgroundOpacity
+                suffix: ""
+                onEdited: (v) => Config.set("dock.backgroundOpacity", v)
             }
             SwitchRow {
                 title: "Liquid Glass"
-                sub: "refracts the wallpaper and live windows behind the dock (falls back to frosted glass without qsb)"
+                sub: "refracts the wallpaper and live windows behind the bar (falls back to frosted glass without qsb)"
                 checked: Config.data.dock.liquid
                 onFlipped: Config.set("dock.liquid", !Config.data.dock.liquid)
             }
@@ -1385,7 +1418,7 @@ Window {
 
             Text {
                 width: parent ? parent.width : 0
-                text: "Pins are managed live from the dock: right-click any app for Keep in Dock / Remove, and drag pinned icons to reorder them. Pins are saved to config.json automatically."
+                text: "Pins are managed live from the dock: right-click an icon for Add Application / Remove from Dock, and drag pinned icons to reorder them. Pins are saved to config.json automatically."
                 color: Theme.dim
                 font.family: Theme.uiFont
                 font.pixelSize: 10

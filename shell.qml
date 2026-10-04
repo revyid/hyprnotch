@@ -41,7 +41,7 @@ ShellRoot {
     //  and the volume/brightness HUD (k4 style). Separate surfaces stay
     //  for what macOS also keeps separate: the dock and Settings.
     IslandWindow {}
-    Dock {}
+    DockHost {}
     SettingsWindow {}
 
     //  ── IPC surface ───────────────────────────────────────────────

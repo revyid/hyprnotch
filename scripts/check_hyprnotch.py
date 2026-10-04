@@ -78,6 +78,16 @@ v17 — Swift-Dock dock port: ToplevelManager (Quickshell.Wayland) and
   Shortcut (QtQuick) added to the module map — the dock's windowsFor()
   iterates ToplevelManager.toplevels and an unimported reference would
   fail at load time exactly like the ScrollIndicator class of r16.
+v18 — hyprland-dock (nick-friedrich) port: the dock now uses surfaces
+  hyprnotch never touched before, verified against the Quickshell source
+  tree (popupwindow.hpp, popupanchor.hpp, widgets/IconImage.qml,
+  desktopentry.hpp, wayland/toplevel/qml.hpp) and now import-enforced:
+  IconImage (Quickshell.Widgets), DragHandler (QtQuick), PopupAdjustment /
+  Edges / ExclusionMode (Quickshell), WlrLayer (Quickshell.Wayland),
+  DesktopEntries + QsWindow (Quickshell).  PopupWindow's surface map
+  gains grabFocus (popupwindow.hpp:87) and IconImage / DragHandler get
+  whitelists.  (Catches: unimported IconImage — "unresolved type" or a
+  load-time 'IconImage is not a type' cascade like r16.)
 """
 import os, re, sys
 
@@ -133,6 +143,14 @@ REQUIRED_MODULE = {
     "ToplevelManager": "Quickshell.Wayland",
     "MultiEffect": "QtQuick.Effects",
     "Shortcut": "QtQuick",
+    "IconImage": "Quickshell.Widgets",
+    "DragHandler": "QtQuick",
+    "PopupAdjustment": "Quickshell",
+    "Edges": "Quickshell",
+    "ExclusionMode": "Quickshell",
+    "WlrLayer": "Quickshell.Wayland",
+    "DesktopEntries": "Quickshell",
+    "QsWindow": "Quickshell",
 }
 
 #  Properties that exist on Quickshell's PanelWindow (proven: IslandWindow
@@ -295,7 +313,14 @@ BASE_PROPS = {
                         "screen", "mask", "margins", "backer"},
     "PopupWindow": I | {"visible", "width", "height", "implicitWidth",
                         "implicitHeight", "color", "screen", "anchor",
-                        "window", "flags", "mask", "margins", "contentItem"},
+                        "window", "flags", "mask", "margins", "contentItem",
+                        "grabFocus"},
+    "IconImage": I | {"source", "asynchronous", "status", "mipmap",
+                      "backer", "implicitSize", "actualSize", "sourceSize",
+                      "fillMode", "paintedWidth", "paintedHeight"},
+    "DragHandler": I | {"target", "acceptedButtons", "enabled", "active",
+                        "activeTranslation", "point", "centroid",
+                        "translation"},
     "Process": I | {"command", "cwd", "stdin", "stdout", "stderr", "running",
                     "environment", "exitCode", "stdoutEnabled",
                     "stderrEnabled"},
@@ -718,17 +743,33 @@ def main():
         #  property (empirically `opacity` failed on the user's build with
         #  'Cannot assign to non-existent property "opacity"'). Only props
         #  PROVEN on the user's build / linux-notch are allowed at roots.
+        #  v18: the root indent is DETECTED (first content line after the
+        #  root type's brace) instead of hard-coded to 4 spaces — the
+        #  hyprland-dock port uses upstream's 2-space style, where nested
+        #  members sit at 4 spaces and the old regex false-flagged every
+        #  one of them as a root property.
         if info["base"] == "PanelWindow":
             code_lines = set(ln for k, v, ln in info["toks"]
                              if k in ("id", "num", "p"))
+            root_indent = None
+            mroot = re.search(r"^" + info["base"] + r"\s*\{",
+                              info["raw"], re.M)
+            if mroot:
+                for tail in info["raw"][mroot.end():].split("\n"):
+                    if not tail.strip() or tail.strip().startswith("//"):
+                        continue
+                    root_indent = len(tail) - len(tail.lstrip(" "))
+                    break
             for ln2, rawline in enumerate(info["raw"].split("\n"), 1):
                 if ln2 not in code_lines:
                     continue
-                m2 = re.match(r"^    ([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*:\s",
+                m2 = re.match(r"^(\s*)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*:\s",
                               rawline)
                 if not m2:
                     continue
-                name2 = m2.group(1)
+                if root_indent is None or len(m2.group(1)) != root_indent:
+                    continue                  # nested member, not a root prop
+                name2 = m2.group(2)
                 if name2 == "id":
                     continue
                 if name2.startswith("on") and len(name2) > 2 and name2[2].isupper():
@@ -956,7 +997,7 @@ def main():
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v17)")
+    print(f"Checked {len(files)} QML files (v18)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:
