@@ -60,6 +60,16 @@ v14 — ScrollIndicator/ScrollBar live in QtQuick.Controls, NOT QtQuick.
   the whole QtQuick.Controls family is now held to the same rule.
   (Catches: @island/LauncherCard.qml[315:13]: ScrollIndicator is not
   a type — launcher/wallpaper picker dead on r16.)
+v15 — Keys attached CONVENIENCE handlers are not portable across
+  Qt/Quickshell builds. The user's build rejected
+  Keys.onPageDownPressed with 'Cannot assign to non-existent property'
+  while resolving its PageUp twin one line earlier — doc-vs-build
+  divergence, load aborted, island dead (r17 round). Only the
+  universal trio exists everywhere: onPressed, onReleased,
+  onShortcutOverride. Everything else must go through Keys.onPressed
+  with explicit event.key checks (the IslandWindow pattern).
+  (Catches: LauncherCard.qml[288:22] onPageDownPressed and any future
+  on<Nav>Pressed / on<Fk>Pressed convenience handler.)
 """
 import os, re, sys
 
@@ -889,12 +899,33 @@ def main():
                             f'arbitrary files OOM-kills the shell; add '
                             f'sourceSize: Qt.size(w * 2, h * 2)')
 
+        # ---- v15: Keys convenience handlers are not portable -------------
+        #  (Catches: 'Cannot assign to non-existent property
+        #  "onPageDownPressed"' on the user's Quickshell build — while its
+        #  PageUp twin resolved. Only onPressed/onReleased/
+        #  onShortcutOverride exist everywhere; route every other key
+        #  through Keys.onPressed + event.key.)
+        for idx in range(len(toks) - 2):
+            a, b, c = toks[idx], toks[idx + 1], toks[idx + 2]
+            if (a[0] == "id" and a[1] == "Keys"
+                    and b[0] == "p" and b[1] == "."
+                    and c[0] == "id" and c[1].startswith("on")
+                    and len(c[1]) > 2 and c[1][2].isupper()):
+                name = c[1][2:]
+                if name not in ("Pressed", "Released", "ShortcutOverride"):
+                    errs.append(f'{path}:{c[2]} Keys.on{name} — attached '
+                                f'convenience handlers are not portable '
+                                f'(onPageDownPressed was missing on the '
+                                f'user\'s build while onPageUpPressed '
+                                f'resolved); use Keys.onPressed with '
+                                f'explicit event.key checks')
+
         for e in errs:
             print("FAIL", e); failures += 1
         for w in warns:
             print("NOTE", w); notes += 1
 
-    print(f"Checked {len(files)} QML files (v14)")
+    print(f"Checked {len(files)} QML files (v15)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:

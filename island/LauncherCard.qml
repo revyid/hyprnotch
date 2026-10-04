@@ -280,16 +280,39 @@ Item {
                     launcherCard.firstSelectable()
                 }
 
-                Keys.onUpPressed: launcherCard.move(-1)
-                Keys.onDownPressed: launcherCard.move(1)
-                Keys.onPageUpPressed: {
-                    for (let i = 0; i < 6; ++i) launcherCard.move(-1)
+                //  Keyboard via the UNIVERSAL Keys.onPressed pattern
+                //  (same as IslandWindow / SettingsWindow). Convenience
+                //  handlers proved unportable: the user's Quickshell
+                //  build rejected Keys.onPageDownPressed with
+                //  "Cannot assign to non-existent property" while
+                //  accepting its PageUp twin (r17 crash). Explicit
+                //  event.key checks never lie across Qt builds.
+                Keys.priority: Keys.BeforeItem
+                Keys.onPressed: function (event) {
+                    switch (event.key) {
+                    case Qt.Key_Up:
+                        launcherCard.move(-1)
+                        event.accepted = true
+                        break
+                    case Qt.Key_Down:
+                        launcherCard.move(1)
+                        event.accepted = true
+                        break
+                    case Qt.Key_PageUp:
+                        for (let i = 0; i < 6; ++i) launcherCard.move(-1)
+                        event.accepted = true
+                        break
+                    case Qt.Key_PageDown:
+                        for (let i = 0; i < 6; ++i) launcherCard.move(1)
+                        event.accepted = true
+                        break
+                    case Qt.Key_Return:
+                    case Qt.Key_Enter:
+                        launcherCard.activate(launcherCard.selected)
+                        event.accepted = true
+                        break
+                    }
                 }
-                Keys.onPageDownPressed: {
-                    for (let i = 0; i < 6; ++i) launcherCard.move(1)
-                }
-                Keys.onReturnPressed: launcherCard.activate(launcherCard.selected)
-                Keys.onEnterPressed: launcherCard.activate(launcherCard.selected)
 
                 Text {
                     anchors.fill: parent
