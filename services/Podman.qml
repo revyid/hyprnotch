@@ -18,6 +18,13 @@ Singleton {
     property string logsFor: ""
 
     function refresh() {
+        //  Feature gate (Settings → Containers → Enabled): the r23 round
+        //  found the toggle was write-only — nothing respected it.
+        if (!Config.get("podman.enabled", true)) {
+            available = false
+            containers = []
+            return
+        }
         lister.command = ["sh", "-c",
             "command -v podman >/dev/null && podman ps -a --format json 2>/dev/null || echo NOPDM"]
         lister.running = true

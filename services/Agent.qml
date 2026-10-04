@@ -20,12 +20,20 @@ Singleton {
         const p = (prompt || "").trim()
         if (p.length === 0 || thinking)
             return
+        //  Feature gate (Settings → Agent → Enabled) — previously the
+        //  toggle existed but nothing read it (r23 fix round).
+        if (!Config.get("agent.enabled", true)) {
+            const copy = messages.slice()
+            copy.push({ role: "agent",
+                        text: "Agent is disabled — turn it on in Settings → Agent." })
+            messages = copy.slice(-60)
+            return
+        }
+        const cmd = command + " " + p.replace(/'/g, "'\\''")
         const copy = messages.slice()
         copy.push({ role: "user", text: p })
         messages = copy
         thinking = true
-
-        const cmd = command + " " + p.replace(/'/g, "'\\''")
         runCmd.command = ["sh", "-c", cmd + " 2>&1"]
         runCmd.running = true
     }

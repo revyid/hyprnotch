@@ -26,11 +26,22 @@
 #    CANTUNBIND <mods> <key>        unbind refused — will be reported
 #    LUA <path> | LUA none          Lua hook rewritten / not a Lua fork
 #    NOHYPRCTL                      hyprctl missing — nothing applied
+#    NOBINDS                        hyprctl gave no bind list (instance
+#                                   signature missing?) — nothing trusted
 
 RAIZ="$1"
 shift
 
 command -v hyprctl >/dev/null 2>&1 || { echo "NOHYPRCTL"; exit 0; }
+
+#  ── 0. sanity: the compositor must hand us a bind list ────────────
+#  When `hyprctl -j binds` comes back EMPTY (instance signature not in
+#  this session, socket path changed, fork quirk), every later step
+#  still "runs" but the summary used to read a useless "0 applied"
+#  (r23 user report). Say so explicitly instead.
+if [ -z "$({ hyprctl -j binds 2>/dev/null || true; } | tr -d '[:space:]')" ]; then
+    echo "NOBINDS"
+fi
 
 #  ── mod name <-> bitmask (Hyprland: shift=1 ctrl=4 alt=8 super=64) ──
 mask_of() {

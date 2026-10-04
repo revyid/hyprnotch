@@ -58,6 +58,33 @@ else
     echo "[HyprNotch] build $BUILD (installed copy)"
 fi
 
+#  ── Liquid Glass shader (pre-compile) ────────────────────────────
+#  The dock's Liquid Glass needs Qt's qsb tool to compile the .frag
+#  into a .qsb. Compile it HERE so the very first frame already has
+#  glass, and say it plainly when the tool is missing — r22 shipped a
+#  silent frosted-glass fallback that looked like "shaders ga fungsi".
+QSB_BIN=""
+for q in qsb qsb6 qsb-qt6 /usr/lib/qt6/bin/qsb /usr/lib64/qt6/bin/qsb /usr/lib/qt/bin/qsb; do
+    if command -v "$q" >/dev/null 2>&1 || [ -x "$q" ]; then
+        QSB_BIN="$(command -v "$q" 2>/dev/null || echo "$q")"
+        break
+    fi
+done
+FRAG="$INSTALLED/dock/liquidglass.frag"
+QSB_OUT="$INSTALLED/dock/liquidglass.frag.qsb"
+if [ -f "$FRAG" ]; then
+    if [ -n "$QSB_BIN" ]; then
+        if "$QSB_BIN" --qt6 -o "$QSB_OUT" "$FRAG" >/dev/null 2>&1; then
+            echo "[HyprNotch] Liquid Glass shader compiled OK (qsb)"
+        else
+            rm -f "$QSB_OUT" 2>/dev/null
+            echo "[HyprNotch] WARNING: qsb rejected the Liquid Glass shader — dock falls back to frosted glass"
+        fi
+    else
+        echo "[HyprNotch] qsb not found — dock uses frosted glass (install qt6-shadertools for Liquid Glass)"
+    fi
+fi
+
 #  ── Keybinds are NOT registered here anymore ─────────────────────
 #  Since r15 the shell itself owns its chords: services/Hotkeys.qml
 #  applies the map edited in Settings → Keybinds ~1.5 s after launch

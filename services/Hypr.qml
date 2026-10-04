@@ -101,10 +101,14 @@ Singleton {
     }
 
     //  Fire-and-forget hyprctl runner for strategy 3.
+    //  NOTE: Quickshell's Process has NO stdoutEnabled/stderrEnabled —
+    //  with no parser attached both channels stay closed, which is
+    //  exactly the silent behavior we want (r22 lesson: assigning the
+    //  k4-style props fails to compile and takes the WHOLE config down
+    //  with it, because every service imports Hypr.qml).
     Process {
         id: ctlSwitch
-        stdoutEnabled: false
-        stderrEnabled: false
+        command: []
     }
 
     Timer {

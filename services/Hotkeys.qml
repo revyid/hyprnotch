@@ -147,6 +147,8 @@ Singleton {
     property string lastSummary: ""
     property string luaPath: ""             // "" = not a Lua fork / not written
     property bool hyprctlMissing: false
+    property bool applierMissing: false     // script never ran (bad sync?)
+    property bool bindsMissing: false       // hyprctl gave no bind list
     property bool rerunPending: false
 
     function apply() {
@@ -177,13 +179,29 @@ Singleton {
         const st = {}
         let applied = 0, busy = 0, failed = 0, cleared = 0
         hyprctlMissing = false
+        applierMissing = false
+        bindsMissing = false
         luaPath = ""
+        //  A healthy run ALWAYS prints at least "LUA none". Empty output
+        //  means the script never ran at all (missing file, failed sync,
+        //  bad path) — the old code just reported a useless "0 applied"
+        //  here (r23 user report: "keybind kedetec 0").
+        if (String(text).trim().length === 0) {
+            applierMissing = true
+            lastSummary = "applier script missing at " + probePath
+                          + " — reinstall or re-sync HyprNotch"
+            return
+        }
         for (let i = 0; i < lines.length; ++i) {
             const line = lines[i]
             if (line.length === 0)
                 continue
             if (line.indexOf("NOHYPRCTL") === 0) {
                 hyprctlMissing = true
+                continue
+            }
+            if (line.indexOf("NOBINDS") === 0) {
+                bindsMissing = true
                 continue
             }
             if (line.indexOf("UNBOUND") === 0 || line.indexOf("CANTUNBIND") === 0) {
@@ -206,13 +224,15 @@ Singleton {
         }
         applyStatus = st
         const bits = []
-        if (hyprctlMissing) bits.push("hyprctl not found — binds not applied")
+        if (bindsMissing)
+            bits.push("hyprctl returned no bind list — is HYPRLAND_INSTANCE_SIGNATURE set in this session?")
+        else if (hyprctlMissing) bits.push("hyprctl not found — binds not applied")
         else bits.push(applied + " applied")
         if (busy > 0) bits.push(busy + " taken by other programs")
         if (failed > 0) bits.push(failed + " failed")
         if (cleared > 0) bits.push(cleared + " stale removed")
         if (luaPath.length > 0) bits.push("saved to " + luaPath.split("/").pop())
-        else if (!hyprctlMissing) bits.push("runtime only (classic config)")
+        else if (!hyprctlMissing && !bindsMissing) bits.push("runtime only (classic config)")
         lastSummary = bits.join(" · ")
     }
 

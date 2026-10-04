@@ -24,6 +24,11 @@ Singleton {
     property int unseen: 0
 
     readonly property bool dnd: Config.get("notifications.dnd", false)
+    //  Master feature switch (Settings → Notifications → Enabled): off
+    //  means history still records, but nothing ever pops and the badge
+    //  stays flat — the r23 user report was that this toggle did
+    //  nothing, because nothing read it.
+    readonly property bool featureOn: Config.get("notifications.enabled", true)
     readonly property int duration: Math.max(2, Config.get("notifications.duration", 5)) * 1000
     readonly property int maxBanners: Config.get("notifications.maxVisible", 3)
 
@@ -43,7 +48,7 @@ Singleton {
     function push(n) {
         const entry = wrap(n)
         history = [entry].concat(history.slice(0, maxHistory - 1))
-        if (!dnd) {
+        if (!dnd && featureOn) {
             unseen += 1
             if (banners.length < maxBanners) {
                 banners = [entry].concat(banners)
@@ -60,7 +65,7 @@ Singleton {
             icon: ""
         })
         history = [entry].concat(history.slice(0, maxHistory - 1))
-        if (!dnd && banners.length < maxBanners)
+        if (!dnd && featureOn && banners.length < maxBanners)
             banners = [entry].concat(banners)
     }
 

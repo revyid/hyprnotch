@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
+import Quickshell.Widgets
 import "../core"
 import "../services"
 import "../island"
@@ -230,6 +231,10 @@ Window {
     property string capMods: ""
     property string capKey: ""
     property string capMsg: ""
+
+    //  Dock pin editor state (Settings → Dock → Pinned apps)
+    property bool addPinOpen: false
+    property var addPinResults: []
 
     //  One row per island action: folded state shows the current chord,
     //  capturing state turns the row into a live key catcher. The focus
@@ -748,6 +753,13 @@ Window {
                 sub: "show the island pill (works with or without the dock)"
                 checked: Config.data.island.enabled
                 onFlipped: Config.set("island.enabled", !Config.data.island.enabled)
+            }
+            SwitchRow {
+                title: "Launcher"
+                sub: "the app grid + command search — Super+Space by default; off = the chord does nothing"
+                checked: Config.get("launcher.enabled", true)
+                onFlipped: Config.set("launcher.enabled",
+                                      !Config.get("launcher.enabled", true))
             }
             SliderRow {
                 title: "Pill height"
@@ -1418,12 +1430,269 @@ Window {
 
             Text {
                 width: parent ? parent.width : 0
-                text: "Pins are managed live from the dock: right-click an icon for Add Application / Remove from Dock, and drag pinned icons to reorder them. Pins are saved to config.json automatically."
+                text: "Also managed live from the dock itself: right-click an icon for Add Application / Remove from Dock, and drag pinned icons to reorder. Everything below writes the same config keys and applies instantly."
                 color: Theme.dim
                 font.family: Theme.uiFont
                 font.pixelSize: 10
                 wrapMode: Text.WordWrap
                 leftPadding: 12
+            }
+
+            //  ── Current pins ─────────────────────────────────────────
+            Column {
+                width: parent ? parent.width : 0
+                spacing: 4
+
+                Repeater {
+                    model: Config.data.dock.pinned || []
+
+                    delegate: Rectangle {
+                        id: pinRow
+                        required property var modelData
+                        required property int index
+                        //  Read the applications model first so this
+                        //  binding re-runs once the async desktop-entry
+                        //  scan lands (the DockItem trick).
+                        readonly property var apps: DesktopEntries.applications.values || []
+                        readonly property var entry: {
+                            const modelRevision = pinRow.apps.length
+                            void modelRevision
+                            return DesktopEntries.byId(pinRow.modelData)
+                        }
+
+                        width: parent ? parent.width : 0
+                        height: 44
+                        radius: Theme.radiusSmall
+                        color: pinArea.containsMouse ? Theme.surfaceHi : Theme.surface
+
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: 12
+                            spacing: 10
+
+                            IconImage {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 24; height: 24
+                                asynchronous: true
+                                source: pinRow.entry && pinRow.entry.icon
+                                    ? Quickshell.iconPath(pinRow.entry.icon, true)
+                                    : Quickshell.iconPath("application-x-executable", true)
+                            }
+
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 420
+                                spacing: 1
+
+                                Text {
+                                    width: parent.width
+                                    text: pinRow.entry && pinRow.entry.name
+                                        ? pinRow.entry.name : pinRow.modelData
+                                    color: Theme.ink
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: 11
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    width: parent.width
+                                    text: pinRow.modelData
+                                    color: Theme.dim
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: 9
+                                    elide: Text.ElideMiddle
+                                }
+                            }
+                        }
+
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.right: parent.right
+                            anchors.rightMargin: 12
+                            spacing: 4
+
+                            Rectangle {
+                                width: 26; height: 26; radius: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: pinUp.containsMouse ? Theme.surfaceHi : Theme.track
+                                opacity: pinUp.enabled ? 1 : 0.35
+                                Glyph { anchors.centerIn: parent; size: 9; colorVal: Theme.ink; glyph: Icons.arrowUp }
+                                MouseArea {
+                                    id: pinUp; anchors.fill: parent; hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    enabled: pinRow.index > 0
+                                    onClicked: Config.moveItem("dock.pinned", pinRow.index, pinRow.index - 1)
+                                }
+                            }
+                            Rectangle {
+                                width: 26; height: 26; radius: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: pinDown.containsMouse ? Theme.surfaceHi : Theme.track
+                                opacity: pinDown.enabled ? 1 : 0.35
+                                Glyph { anchors.centerIn: parent; size: 9; colorVal: Theme.ink; glyph: Icons.arrowDown }
+                                MouseArea {
+                                    id: pinDown; anchors.fill: parent; hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    enabled: pinRow.index < (Config.data.dock.pinned || []).length - 1
+                                    onClicked: Config.moveItem("dock.pinned", pinRow.index, pinRow.index + 1)
+                                }
+                            }
+                            Rectangle {
+                                width: 26; height: 26; radius: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: pinDel.containsMouse ? Theme.red : Theme.track
+                                Glyph { anchors.centerIn: parent; size: 10; colorVal: "#ffffff"; glyph: Icons.trash }
+                                MouseArea {
+                                    id: pinDel; anchors.fill: parent; hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: settingsWindow.removeDockPin(pinRow.index)
+                                }
+                            }
+                        }
+
+                        MouseArea {
+                            id: pinArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+                    }
+                }
+
+                Text {
+                    visible: (Config.data.dock.pinned || []).length === 0
+                    width: parent ? parent.width : 0
+                    text: "No pinned apps — the dock shows running apps only. Add some below, or right-click any icon on the dock."
+                    color: Theme.dim
+                    font.family: Theme.uiFont
+                    font.pixelSize: 10
+                    leftPadding: 12
+                    topPadding: 4
+                }
+            }
+
+            //  ── Add application picker ───────────────────────────────
+            Rectangle {
+                width: parent ? parent.width : 0
+                height: 38
+                radius: Theme.radiusSmall
+                color: addPinArea.containsMouse ? Theme.surfaceHi : Theme.surface
+                Behavior on color { ColorAnimation { duration: 140 } }
+
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    spacing: 8
+
+                    Glyph {
+                        anchors.verticalCenter: parent.verticalCenter
+                        size: 11
+                        colorVal: Theme.ink
+                        glyph: Icons.plus
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: addPinOpen ? "Hide the picker" : "Add application…"
+                        color: Theme.ink
+                        font.family: Theme.uiFont
+                        font.pixelSize: 11
+                    }
+                }
+                MouseArea {
+                    id: addPinArea; anchors.fill: parent; hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        addPinOpen = !addPinOpen
+                        addPinResults = []
+                        addPinSearch.text = ""
+                        if (addPinOpen)
+                            addPinSearch.forceActiveFocus()
+                    }
+                }
+            }
+
+            Column {
+                visible: addPinOpen
+                width: parent ? parent.width : 0
+                spacing: 4
+
+                TextField {
+                    id: addPinSearch
+                    width: parent.width - 24
+                    height: 30
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    placeholderText: "search applications by name or id…"
+                    color: Theme.ink
+                    font.family: Theme.uiFont
+                    font.pixelSize: 11
+                    selectByMouse: true
+                    background: Rectangle {
+                        radius: 6
+                        color: Theme.surfaceHi
+                        border.width: addPinSearch.activeFocus ? 1 : 0
+                        border.color: Theme.accent
+                    }
+                    onTextChanged: addPinResults = settingsWindow.dockSearchResults(text)
+                }
+
+                Repeater {
+                    model: addPinResults
+
+                    delegate: Rectangle {
+                        id: pinResult
+                        required property var modelData
+                        width: parent ? parent.width - 24 : 0
+                        height: 34
+                        radius: 6
+                        anchors.left: parent ? parent.left : undefined
+                        anchors.leftMargin: 12
+                        color: pinAddArea.containsMouse ? Theme.surfaceHi : Theme.surface
+
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: 8
+                            spacing: 8
+
+                            IconImage {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 20; height: 20
+                                asynchronous: true
+                                source: pinResult.modelData.icon
+                                    ? Quickshell.iconPath(pinResult.modelData.icon, true)
+                                    : Quickshell.iconPath("application-x-executable", true)
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 400
+                                text: pinResult.modelData.name + "  ·  " + pinResult.modelData.id
+                                color: Theme.ink
+                                font.family: Theme.uiFont
+                                font.pixelSize: 10
+                                elide: Text.ElideMiddle
+                            }
+                        }
+
+                        MouseArea {
+                            id: pinAddArea; anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                settingsWindow.addDockPin(pinResult.modelData.id)
+                                addPinResults = settingsWindow.dockSearchResults(addPinSearch.text)
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    visible: addPinSearch.text.length > 0 && addPinResults.length === 0
+                    text: "no matching applications"
+                    color: Theme.dim
+                    font.family: Theme.uiFont
+                    font.pixelSize: 10
+                    leftPadding: 12
+                }
             }
 
             Rectangle {
@@ -2399,6 +2668,53 @@ Window {
             enabled: true
         })
         Config.setList("quickActions", arr)
+    }
+
+    //  ── Dock pin management — Settings side (r23) ──────────────────
+    //  The dock itself still owns right-click → Add/Remove and drag to
+    //  reorder; this editor mirrors dock.pinned for people who prefer
+    //  doing it in one window. Writes go through the same config keys,
+    //  so both stay in sync live.
+    function removeDockPin(index) {
+        const arr = (Config.data.dock.pinned || []).slice()
+        if (index < 0 || index >= arr.length)
+            return
+        arr.splice(index, 1)
+        Config.setList("dock.pinned", arr)
+    }
+
+    function addDockPin(desktopId) {
+        const id = String(desktopId || "")
+        if (id.length === 0)
+            return
+        const arr = (Config.data.dock.pinned || []).slice()
+        if (arr.indexOf(id) >= 0)
+            return
+        arr.push(id)
+        Config.setList("dock.pinned", arr)
+    }
+
+    //  First matches for the Add-application search. noDisplay entries
+    //  and already-pinned ids are skipped; empty query → no results.
+    function dockSearchResults(query) {
+        const needle = String(query || "").toLowerCase().trim()
+        const pins = Config.data.dock.pinned || []
+        const apps = DesktopEntries.applications.values || []
+        const out = []
+        if (needle.length === 0)
+            return out
+        for (let i = 0; i < apps.length && out.length < 6; ++i) {
+            const a = apps[i]
+            if (!a || a.noDisplay)
+                continue
+            const id = String(a.id || "")
+            if (pins.indexOf(id) >= 0)
+                continue
+            const name = String(a.name || "").toLowerCase()
+            if (name.indexOf(needle) >= 0 || id.toLowerCase().indexOf(needle) >= 0)
+                out.push(a)
+        }
+        return out
     }
 
     //  Pin management moved INTO the dock itself (Swift-Dock model):

@@ -38,14 +38,36 @@ Singleton {
         return false
     }
 
+    //  ── Per-feature gates (r23) ───────────────────────────────────
+    //  Settings can switch whole features off; the toggles used to be
+    //  write-only (r23 user report: "enable/disable per fitur ga
+    //  fungsi"). Every popup entry now respects its feature's
+    //  enabled flag, so a switched-off view can never open — from the
+    //  pill, a keybind, IPC or a plugin.
+    function featureAllows(name) {
+        if (name === "controlCenter")
+            return Config.get("controlCenter.enabled", true)
+        if (name === "launcher")
+            return Config.get("launcher.enabled", true)
+        if (name === "notifCenter")
+            return Config.get("notifications.enabled", true)
+        if (name === "calendar")
+            return Config.get("calendar.enabled", true)
+        if (name === "weather")
+            return Config.get("island.showWeather", true)
+        if (name === "plugins")
+            return Config.get("plugins.enabled", true)
+        return true
+    }
+
     function togglePopup(name) {
-        if (!isValid(name))
+        if (!isValid(name) || !featureAllows(name))
             return
         activePopup = (activePopup === name) ? "none" : name
     }
 
     function openPopup(name) {
-        if (!isValid(name))
+        if (!isValid(name) || !featureAllows(name))
             return
         activePopup = name
     }

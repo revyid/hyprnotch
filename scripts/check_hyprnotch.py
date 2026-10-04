@@ -360,9 +360,17 @@ BASE_PROPS = {
     "DragHandler": I | {"target", "acceptedButtons", "enabled", "active",
                         "activeTranslation", "point", "centroid",
                         "translation"},
-    "Process": I | {"command", "cwd", "stdin", "stdout", "stderr", "running",
-                    "environment", "exitCode", "stdoutEnabled",
-                    "stderrEnabled"},
+    #  Real Quickshell.Io.Process surface (verified against
+    #  src/io/process.hpp, r23): running, processId, command,
+    #  workingDirectory, environment, clearEnvironment, stdout, stderr,
+    #  stdinEnabled — plus signals started/exited and methods
+    #  start()/signal()/kill()/terminate()/startDetached().  There is
+    #  NO stdoutEnabled/stderrEnabled (k4 API vocabulary); assigning
+    #  them fails to compile and, since every service imports Hypr.qml,
+    #  once took the WHOLE config down with it (r22 incident).
+    "Process": I | {"command", "workingDirectory", "stdin", "stdout",
+                    "stderr", "running", "environment",
+                    "clearEnvironment", "stdinEnabled", "exitCode"},
     "FileView": I | {"path", "text", "blockLoading", "blockWrites",
                      "watchChanges", "printErrors", "loaded", "adapter"},
     "SplitParser": I | {"splitMarker"},
