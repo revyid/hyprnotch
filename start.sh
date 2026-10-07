@@ -10,6 +10,27 @@ INSTALLED="$HOME/.config/quickshell/hyprnotch"
 
 BUILD="$(cat "$HERE/VERSION" 2>/dev/null || echo 'v1')"
 
+#  ── Subcommands: doctor / logs / validate ────────────────────────
+#  Utilities that make debugging painless (r27):
+#    ./start.sh doctor    full environment + config + last-errors report
+#    ./start.sh logs      follow the newest quickshell log live
+#    ./start.sh validate  static QML suite + the planted-bug selftest
+case "${1:-}" in
+    doctor|--doctor)
+        exec sh "$HERE/scripts/doctor.sh" ;;
+    logs|--logs)
+        LOGDIR="/run/user/$(id -u)/quickshell/by-id"
+        NEWEST="$(ls -t "$LOGDIR"/*/log.qslog 2>/dev/null | head -1)"
+        [ -n "$NEWEST" ] || { echo "[HyprNotch] no log under $LOGDIR — is the shell running?"; exit 1; }
+        echo "[HyprNotch] following $NEWEST (Ctrl-C to stop)"
+        exec tail -n 80 -f "$NEWEST" ;;
+    validate|--validate)
+        echo "[HyprNotch] static suite:"
+        python3 "$HERE/scripts/check_hyprnotch.py" || exit 1
+        echo "[HyprNotch] planted-bug selftest:"
+        exec python3 "$HERE/scripts/check_hyprnotch.py" --selftest ;;
+esac
+
 command -v quickshell >/dev/null 2>&1 || {
     echo "[HyprNotch] ERROR: 'quickshell' not found in PATH."
     echo "           Install it first (Arch: paru -S quickshell-git)."

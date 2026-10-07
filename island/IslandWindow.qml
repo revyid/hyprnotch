@@ -228,7 +228,7 @@ PanelWindow {
             acceptedButtons: Qt.LeftButton
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
             enabled: !islandWindow.hudActive && !islandWindow.bannerActive
-                && !islandWindow.morphing
+                && !island.morphing
 
             onActiveTranslationChanged: island.swipeFollow(swipeDrag.activeTranslation)
             onActiveChanged: {
@@ -316,7 +316,7 @@ PanelWindow {
             ScriptAction {
                 script: {
                     morphLayer.rotation = 0
-                    islandWindow.morphing = false
+                    island.morphing = false
                 }
             }
         }
@@ -474,6 +474,32 @@ PanelWindow {
                                 onClicked: if (!wsPill.overflow) Hypr.switchTo(wsPill.modelData.id)
                             }
                         }
+                    }
+                }
+
+                //  ── Live spectrum in the pill itself (r27): the cava
+                //  used to live only inside the media cards, so with the
+                //  notch closed there was NO visual feedback at all
+                //  ("masi gabisa cavanya"). Now the island breathes with
+                //  the track whenever music plays — the classic Dynamic
+                //  Island tell. The cards keep the big one; here the row
+                //  auto-widens (pillRow.implicitWidth) and collapses to
+                //  nothing the second the music stops.
+                Item {
+                    visible: Media.playing && Cava.enabled
+                        && !islandWindow.expanded && !islandWindow.hudActive
+                        && !islandWindow.bannerActive && !islandWindow.peekActive
+                    anchors.verticalCenter: parent.verticalCenter
+                    implicitWidth: pillCava.width
+                    implicitHeight: islandWindow.cfg.pillHeight
+
+                    CavaBars {
+                        id: pillCava
+                        count: 12
+                        barWidth: 2
+                        maxHeight: 14
+                        gap: 2
+                        anchors.centerIn: parent
                     }
                 }
 

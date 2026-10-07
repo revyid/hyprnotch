@@ -89,6 +89,11 @@ v18 — hyprland-dock (nick-friedrich) port: the dock now uses surfaces
   whitelists.  (Catches: unimported IconImage — "unresolved type" or a
   load-time 'IconImage is not a type' cascade like r16.)
 
+v21 — id member resolution (cross-object shadowing): `someId.member`
+where the member is declared on a DIFFERENT object of the same file (or
+is itself an id) is rejected — the exact class that shipped three times
+in r25/r26 (islandWindow.swipeFollow, islandWindow.morphing,
+cava.watchdog, bt._watch). Conservative: undeclared members pass.
 v20 — REQUIRED_MODULE += WheelHandler (QtQuick; used by the r24 swipe
      navigation on the island). Shaders are gone from the repo (r24
      removed Liquid Glass) so the shader pass is a no-op now, kept for
@@ -814,6 +819,66 @@ def main():
                 if b[1] not in sinfo["props"] and b[1] not in sinfo["funcs"]:
                     errs.append(f'{path}:{a[2]} singleton {a[1]}.{b[1]} not declared')
 
+        # ---- v21: id member resolution (cross-object shadowing) -------------
+        #  `someId.member` where someId is an id declared in THIS file: the
+        #  member must exist ON the object that owns the id (its declared
+        #  props/funcs, its component type's props, or its whitelisted base
+        #  type). If the member IS declared elsewhere in the file — on a
+        #  different object — or is itself an id, that is the exact bug class
+        #  that shipped three times in r25/r26: islandWindow.swipeFollow (the
+        #  morph silently never ran), islandWindow.morphing, cava.watchdog
+        #  (child ids are NOT properties of the root). Conservative: members
+        #  declared nowhere in the file cannot be verified here and pass.
+        objs21 = scan_objects(info["toks"])
+        id_owner = {}
+        for o in objs21:
+            for nm, ln in o.get("ids", []):
+                if nm and nm not in id_owner:
+                    id_owner[nm] = o
+        if id_owner:
+            decl_any = set()
+            for o in objs21:
+                for p, _ in o.get("props_decl", []):
+                    decl_any.add(p)
+                for f, _ in o.get("funcs_decl", []):
+                    decl_any.add(f)
+            UNIVERSAL = {"id", "objectName", "parent", "children",
+                         "resources", "data", "destroy", "toString"}
+            AMBIGUOUS_QT = {"color", "width", "height", "visible", "x", "y",
+                            "z", "opacity", "enabled", "focus", "rotation",
+                            "scale", "clip", "spacing", "radius", "source",
+                            "text", "model", "count", "index", "font",
+                            "state", "contentItem", "background"}
+            for i in range(len(toks) - 2):
+                a, dot, b = toks[i], toks[i + 1], toks[i + 2]
+                if a[0] != "id" or dot[0] != "p" or dot[1] != "." or b[0] != "id":
+                    continue
+                base_id, mem, ln = a[1], b[1], a[2]
+                if base_id not in id_owner or mem[0:1].isupper():
+                    continue              # attached property / enum access
+                if mem in UNIVERSAL:
+                    continue
+                owner = id_owner[base_id]
+                if owner["type"] in SKIP_VALIDATE_TYPES:
+                    continue
+                ok = set(p for p, _ in owner.get("props_decl", []))
+                ok |= set(f for f, _ in owner.get("funcs_decl", []))
+                comp = props_of(owner["type"], path)   # local component chain
+                if comp:
+                    ok |= comp
+                elif owner["type"] in BASE_PROPS:
+                    ok |= BASE_PROPS[owner["type"]]
+                elif mem in AMBIGUOUS_QT:
+                    continue              # unresolvable base + common name
+                if mem in ok:
+                    continue
+                if mem in decl_any or mem in id_owner:
+                    errs.append(
+                        f'{path}:{ln} [{owner["type"]} id:{base_id}] has no '
+                        f'member "{mem}" — it is declared on another object '
+                        f'in this file (child ids are NOT properties; call '
+                        f'through the owning id)')
+
         # ---- v4: PanelWindow root-level property whitelist -----------------
         #  Quickshell's PanelWindow does NOT expose every QQuickWindow
         #  property (empirically `opacity` failed on the user's build with
@@ -1192,11 +1257,105 @@ def main():
                       f"fragColor)")
                 failures += 1
 
-    print(f"Checked {len(files)} QML files + {len(shader_files)} shaders (v20)")
+    print(f"Checked {len(files)} QML files + {len(shader_files)} shaders (v21)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:
         print(f"{failures} problems found")
-        sys.exit(1)
+    return failures
 
-main()
+
+#  --selftest: prove the shipped-bug detectors keep firing. The fixture
+#  replants the exact r25/r26 cross-object bugs (function called through
+#  the wrong id, a child id read as a property) plus a clean control
+#  file — v21 must flag all three on the buggy file and none on the
+#  clean one. Guards the guard: if this ever stops passing, the class
+#  of bug that shipped three rounds in a row is invisible again.
+def selftest():
+    import tempfile, io, contextlib
+
+    BUGGY = """pragma Singleton
+import QtQuick
+import Quickshell
+Singleton {
+    id: root
+    property bool flag: false
+    Item {
+        id: inner
+        property bool morphing: false
+        function swipeFollow(p) {
+            root.flag = p
+        }
+    }
+    Timer {
+        id: watchdog
+        interval: 10
+    }
+    Item {
+        id: host
+        x: root.morphing ? 4 : 0
+    }
+    Component.onCompleted: {
+        root.swipeFollow(1)
+        root.watchdog.restart()
+    }
+}
+"""
+    CLEAN = """pragma Singleton
+import QtQuick
+import Quickshell
+Singleton {
+    id: root
+    property bool flag: false
+    Item {
+        id: inner
+        property bool morphing: false
+        function swipeFollow(p) {
+            root.flag = p
+        }
+    }
+    Timer {
+        id: watchdog
+        interval: 10
+    }
+    Item {
+        id: host
+        x: inner.morphing ? 4 : 0
+    }
+    Component.onCompleted: {
+        inner.swipeFollow(1)
+        watchdog.restart()
+    }
+}
+"""
+    tmp = tempfile.mkdtemp(prefix="hyprnotch-selftest-")
+    with open(os.path.join(tmp, "buggy.qml"), "w") as f:
+        f.write(BUGGY)
+    with open(os.path.join(tmp, "clean.qml"), "w") as f:
+        f.write(CLEAN)
+    global ROOT
+    ROOT = tmp
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        main()
+    out = buf.getvalue()
+    bad = [l for l in out.splitlines()
+           if l.startswith("FAIL") and "buggy.qml" in l]
+    clean_bad = [l for l in out.splitlines()
+                 if l.startswith("FAIL") and "clean.qml" in l]
+    ok = (len(bad) == 3 and len(clean_bad) == 0
+          and all("has no member" in l for l in bad))
+    if ok:
+        print("SELFTEST PASS — v21 caught all 3 planted cross-object "
+              "bugs; the clean file was not punished")
+    else:
+        print("SELFTEST FAIL")
+        for l in bad + clean_bad:
+            print("  " + l)
+    return 0 if ok else 1
+
+
+if len(sys.argv) > 1 and sys.argv[1] == "--selftest":
+    sys.exit(selftest())
+else:
+    sys.exit(main())

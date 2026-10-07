@@ -174,4 +174,5 @@ printf '    ALL chords are editable live in Settings → Keybinds (Settings wind
 printf '    About This Device: Super+I, or Control Center → System\n'
 printf '    Wallpaper picker:  Super+G, or Control Center → System → Wallpaper\n'
 printf '    Plugins menu: Super+O, or Control Center → Plugins → Manage\n'
+printf '    Something broken? ./start.sh doctor (tools/config/last errors) · ./start.sh logs\n'
 printf '\n'

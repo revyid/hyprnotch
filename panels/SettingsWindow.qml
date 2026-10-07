@@ -818,7 +818,7 @@ Window {
 
             SwitchRow {
                 title: "Audio visualizer (cava)"
-                sub: "spectrum bars while music plays — real cava frames when the binary is installed, a smooth fallback otherwise"
+                sub: "spectrum in the pill, peek and media tile while music plays — " + Cava.status
                 checked: Config.get("island.cava", true)
                 onFlipped: Config.set("island.cava", !Config.get("island.cava", true))
             }

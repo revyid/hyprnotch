@@ -178,8 +178,8 @@ Singleton {
             if (d.paired || d.bonded) {
                 if (!d.trusted)
                     d.trusted = true
-                bt._watch.rounds = 0
-                bt._watch.restart()
+                _watch.rounds = 0
+                _watch.restart()
             } else {
                 bt.pairFailedMac = d.address
                 bt._recent = null

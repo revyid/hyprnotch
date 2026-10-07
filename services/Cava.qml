@@ -29,6 +29,25 @@ Singleton {
     readonly property bool enabled: Config.get("island.cava", true)
     readonly property bool active: enabled && Media.playing
 
+    //  Human-readable engine state — surfaced in Settings and by the
+    //  doctor script (start.sh doctor) so "cava gabisa" always has an
+    //  answer: which engine is on, and WHY it is not the real one.
+    readonly property string status: {
+        if (!enabled)
+            return "off — island.cava disabled"
+        if (!Media.hasPlayer)
+            return "waiting — no MPRIS player found"
+        if (!Media.playing)
+            return "paused"
+        if (usingTool)
+            return "live — real cava frames"
+        if (toolFailed)
+            return "synth fallback — cava could not attach this session"
+        if (!toolAvailable)
+            return "synth fallback — cava binary not installed"
+        return "synth fallback"
+    }
+
     readonly property int count: 14
 
     property var bars: []                  // count values, 0..1
