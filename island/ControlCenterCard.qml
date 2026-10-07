@@ -834,7 +834,6 @@ Item {
                                     font.family: Theme.uiFont
                                     font.pixelSize: 11
                                     color: Theme.ink
-                                    caretColor: Theme.accent
                                     placeholderTextColor: Theme.dim
                                     focus: Net.pskTarget === netEntry.modelData
                                     background: Rectangle {
@@ -1618,7 +1617,6 @@ Item {
                     font.family: Theme.uiFont
                     font.pixelSize: 11
                     color: Theme.ink
-                    caretColor: Theme.accent
                     placeholderTextColor: Theme.dim
                     background: Rectangle {
                         radius: Theme.radiusSmall

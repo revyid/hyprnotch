@@ -181,7 +181,6 @@ Item {
                 verticalAlignment: TextInput.AlignVCenter
                 text: Clipboard.query
                 color: Theme.ink
-                caretColor: Theme.accent
                 font.family: Theme.uiFont
                 font.pixelSize: 12
                 clip: true

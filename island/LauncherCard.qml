@@ -427,7 +427,6 @@ Item {
                 verticalAlignment: TextInput.AlignVCenter
                 text: launcherCard.query
                 color: Theme.ink
-                caretColor: Theme.accent
                 font.family: Theme.uiFont
                 font.pixelSize: 13
                 clip: true

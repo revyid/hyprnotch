@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HyprNotch QML sanity checks v5 (no Qt toolchain needed).
+"""HyprNotch QML sanity checks v22 (no Qt toolchain needed).
 
 v2: brace balance, local type resolution, import presence.
 v3 — property-existence validation on local components.
@@ -89,6 +89,23 @@ v18 — hyprland-dock (nick-friedrich) port: the dock now uses surfaces
   whitelists.  (Catches: unimported IconImage — "unresolved type" or a
   load-time 'IconImage is not a type' cascade like r16.)
 
+v22 — property existence on BUILT-IN & INLINE-COMPONENT types. The v3
+  check only fires on local file components, so a hallucinated property
+  on a bare Qt type was validated NOWHERE — and it shipped three times:
+  r18 Keys.onPageDownPressed, r22 Process.stderrEnabled, r28
+  TextField.caretColor (caretColor exists on NO Qt Quick input type;
+  QML aborts the whole file at the first unknown property, and
+  IslandWindow instantiates every card, so one miss bricks the entire
+  config: 'Failed to load configuration').
+  Tier A: every assignment on a BASE_PROPS type (Rectangle, Text,
+  TextField, MouseArea, Process, PanelWindow, ...) must exist on that
+  type's whitelisted surface (+ the object's own property
+  declarations, + all file-level declarations for file roots).
+  Tier B: every assignment on an inline `component X: Base` instance
+  (SectionLabel / SwitchRow / SliderRow ...) must be declared somewhere
+  in the same file or exist on Base's surface — catches typos and
+  cross-object property confusion on the Settings helpers.
+  Selftest replants caretColor on a TextField + a typo'd inline prop.
 v21 — id member resolution (cross-object shadowing): `someId.member`
 where the member is declared on a DIFFERENT object of the same file (or
 is itself an id) is rejected — the exact class that shipped three times
@@ -200,6 +217,7 @@ REQUIRED_MODULE = {
     "WlrLayer": "Quickshell.Wayland",
     "DesktopEntries": "Quickshell",
     "QsWindow": "Quickshell",
+    "Intersection": "Quickshell",
 }
 
 #  Properties that exist on Quickshell's PanelWindow (proven: IslandWindow
@@ -225,14 +243,17 @@ QT_BASE = {
 I = set("x y width height visible enabled opacity rotation scale z clip focus "
         "activeFocus state states transitions transform transformOrigin data "
         "resources children parent anchors implicitWidth implicitHeight layer "
-        "smooth antialiasing baselineOffset containmentMask palette".split())
+        "smooth antialiasing baselineOffset containmentMask palette "
+        "objectName".split())
 R = I | {"color", "radius", "border", "gradient"}
 BASE_PROPS = {
     "Item": I, "Rectangle": R,
     "Text": R | {"text", "font", "style", "styleColor", "elide", "wrapMode",
                  "horizontalAlignment", "verticalAlignment", "lineHeight",
                  "maximumLineCount", "minimumPixelSize", "fontSizeMode",
-                 "renderType", "textFormat", "linkColor"},
+                 "renderType", "textFormat", "linkColor",
+                 "padding", "leftPadding", "rightPadding", "topPadding",
+                 "bottomPadding"},
     "MouseArea": I | {"hoverEnabled", "cursorShape", "acceptedButtons", "drag",
                       "pressed", "containsMouse", "mouseX", "mouseY",
                       "propagateComposedEvents", "preventStealing",
@@ -357,7 +378,9 @@ BASE_PROPS = {
     "GradientStop": I | {"position", "color"},
     "Component": I | {"objectName"},
     "Window": I | {"visible", "width", "height", "color", "title", "flags",
-                   "transientParent", "screen", "visibility"},
+                   "transientParent", "screen", "visibility",
+                   "minimumWidth", "minimumHeight", "maximumWidth",
+                   "maximumHeight"},
     "PanelWindow": I | {"anchors", "exclusiveZone", "exclusionMode",
                         "aboveWindows", "focusable", "color", "visible",
                         "screen", "mask", "margins", "backer"},
@@ -368,7 +391,9 @@ BASE_PROPS = {
     "IconImage": I | {"source", "asynchronous", "status", "mipmap",
                       "backer", "implicitSize", "actualSize", "sourceSize",
                       "fillMode", "paintedWidth", "paintedHeight"},
-    "DragHandler": I | {"target", "acceptedButtons", "enabled", "active",
+    "DragHandler": I | {"target", "acceptedButtons", "acceptedDevices",
+                        "acceptedModifiers", "acceptedPointerTypes",
+                        "dragThreshold", "enabled", "active",
                         "activeTranslation", "point", "centroid",
                         "translation"},
     #  Real Quickshell.Io.Process surface (verified against
@@ -509,7 +534,9 @@ def scan_objects(toks):
         k, v, ln = toks[idx]
         if k == "p" and v == "?":
             nxt = toks[idx+1] if idx + 1 < len(toks) else None
-            if not (nxt and nxt[0] == "p" and nxt[1] in (".", "?")):
+            prv = toks[idx-1] if idx else None
+            if not (nxt and nxt[0] == "p" and nxt[1] in (".", "?")) \
+               and not (prv and prv[0] == "p" and prv[1] == "?"):
                 tern += 1
             continue
         if k == "p" and v == ":":
@@ -578,10 +605,14 @@ def scan_objects(toks):
             nxt = toks[idx+1] if idx + 1 < len(toks) else None
             if not (nxt and nxt[0] == "p" and nxt[1] == ":"):
                 continue
+            if tern > 0:
+                continue   # ternary branch value (x: c ? true : y), not an assignment
             if prv and prv[0] == "p" and prv[1] == ".":
                 continue                       # grouped / attached (a.b:)
-            if re.match(r"^on[A-Z]", v):
-                # signal handler — record for check 6
+            if re.match(r"^on[^a-z]*[A-Z]", v):
+                # signal handler — record for check 6.  Qt's rule (qqmlsignalnames):
+                # skip the non-letter prefix after 'on' before case-flipping, so
+                # on_SinkChanged is a valid handler for property _sink.
                 if stack and stack[-1][0] == "qml":
                     stack[-1][1]["onx"].append((v[2:], ln))
                 continue
@@ -787,7 +818,9 @@ def main():
             # ---- check 6: handlers on local components ---------------------
             sigs = set(finfo["sigs"]) if finfo else set()
             for name, ln in obj["onx"]:
-                sig = name[0].lower() + name[1:]          # onClicked -> clicked
+                mh = re.match(r"^([^a-z]*)([A-Z])(.*)$", name)
+                sig = (mh.group(1) + mh.group(2).lower() + mh.group(3)) \
+                    if mh else name           # onClicked -> clicked; on_SinkChanged -> _sinkChanged
                 chg = sig.endswith("Changed")
                 if sig in sigs or sig in ok_props or \
                    (chg and sig[:-7] in ok_props) or \
@@ -796,6 +829,46 @@ def main():
                     continue
                 errs.append(f'{path}:{ln} [{t}] handler "on{name}" does not '
                             f'match any signal or property')
+
+        # ---- v22: property existence on built-in & inline-comp types -------
+        #  v3 only fires on LOCAL file components; a hallucinated property
+        #  on a bare Qt type (TextField.caretColor, Process.stderrEnabled)
+        #  was validated nowhere — and QML aborts the whole file at the
+        #  first unknown property, so one miss bricks the shell (r28).
+        #  Tier A: assignments on BASE_PROPS types must exist on that
+        #  surface (+ own property declarations, + file declarations for
+        #  the file root).
+        #  Tier B: assignments on inline `component X: Base` instances
+        #  must be declared somewhere in the same file or exist on Base.
+        inline_base = dict(re.findall(
+            r"\bcomponent\s+(\w+)\s*:\s*([A-Z]\w*)", info["code"]))
+        file_props22 = set()
+        for o22 in scan_objects(info["toks"]):
+            file_props22 |= set(p for p, _ in o22.get("props_decl", []))
+        for obj in scan_objects(info["toks"]):
+            t = obj["type"]
+            if t in SKIP_VALIDATE_TYPES or component_file(t, path) is not None:
+                continue
+            if t in BASE_PROPS:
+                okp22 = set(BASE_PROPS[t])
+            elif t in inline_base:
+                b22 = inline_base[t]
+                okp22 = set()
+                if component_file(b22, path) is not None:
+                    okp22 |= props_of(b22, path) or set()
+                if b22 in BASE_PROPS:
+                    okp22 |= BASE_PROPS[b22]
+                okp22 |= file_props22
+            else:
+                continue                  # module type with unknown surface
+            if obj.get("isroot"):
+                okp22 |= info["props"]
+            okp22 |= set(p for p, _ in obj.get("props_decl", []))
+            for name, ln in obj.get("assign", []):
+                if name in okp22 or re.match(r"^on[^a-z]*[A-Z]", name):
+                    continue
+                errs.append(f'{path}:{ln} [{t}] cannot assign to non-existent '
+                            f'property "{name}" (v22 built-in surface)')
 
         # ---- check 7: singleton member references --------------------------
         sing_files = {}
@@ -913,7 +986,7 @@ def main():
                 name2 = m2.group(2)
                 if name2 == "id":
                     continue
-                if name2.startswith("on") and len(name2) > 2 and name2[2].isupper():
+                if re.match(r"^on[^a-z]*[A-Z]", name2):
                     continue                  # signal/property handler
                 if name2.split(".")[0] in PANEL_PROVEN or \
                    name2.startswith("WlrLayershell."):
@@ -1014,7 +1087,10 @@ def main():
             for name, ln in obj["onx"]:
                 if not name.endswith("Changed") or len(name) <= 7:
                     continue          # onPaint / onClicked — signals, skip
-                target = name[0].lower() + name[1:-7]
+                mh7 = re.match(r"^([^a-z]*)([A-Z])(.*)$", name)
+                dem = (mh7.group(1) + mh7.group(2).lower() + mh7.group(3)) \
+                    if mh7 else name[0].lower() + name[1:]
+                target = dem[:-7]
                 if target in surface:
                     continue
                 if (target + "Changed") in QT_OBJECT_SIGNALS.get(t, set()):
@@ -1257,7 +1333,7 @@ def main():
                       f"fragColor)")
                 failures += 1
 
-    print(f"Checked {len(files)} QML files + {len(shader_files)} shaders (v21)")
+    print(f"Checked {len(files)} QML files + {len(shader_files)} shaders (v22)")
     if failures == 0:
         print("ALL CHECKS PASSED")
     else:
@@ -1328,11 +1404,54 @@ Singleton {
     }
 }
 """
+    V22BUGGY = """import QtQuick
+import QtQuick.Controls
+Rectangle {
+    id: root
+    width: 200; height: 40
+    component Chip: Rectangle {
+        property string label: ""
+    }
+    TextField {
+        anchors.fill: parent
+        placeholderText: "search"
+        caretColor: "#ff0000"
+    }
+    Chip {
+        labl: "typos happen"
+    }
+}
+"""
+    V22CLEAN = """import QtQuick
+import QtQuick.Controls
+Rectangle {
+    id: root
+    width: 200; height: 40
+    component Chip: Rectangle {
+        property string label: ""
+    }
+    TextField {
+        anchors.fill: parent
+        placeholderText: "search"
+        placeholderTextColor: "#80ffffff"
+        color: "#ffffff"
+        background: Rectangle { radius: 4 }
+    }
+    Chip {
+        anchors.verticalCenter: parent.verticalCenter
+        label: "clean"
+    }
+}
+"""
     tmp = tempfile.mkdtemp(prefix="hyprnotch-selftest-")
     with open(os.path.join(tmp, "buggy.qml"), "w") as f:
         f.write(BUGGY)
     with open(os.path.join(tmp, "clean.qml"), "w") as f:
         f.write(CLEAN)
+    with open(os.path.join(tmp, "v22buggy.qml"), "w") as f:
+        f.write(V22BUGGY)
+    with open(os.path.join(tmp, "v22clean.qml"), "w") as f:
+        f.write(V22CLEAN)
     global ROOT
     ROOT = tmp
     buf = io.StringIO()
@@ -1340,14 +1459,23 @@ Singleton {
         main()
     out = buf.getvalue()
     bad = [l for l in out.splitlines()
-           if l.startswith("FAIL") and "buggy.qml" in l]
+           if l.startswith("FAIL") and "buggy.qml" in l
+           and "v22buggy" not in l]
     clean_bad = [l for l in out.splitlines()
-                 if l.startswith("FAIL") and "clean.qml" in l]
+                 if l.startswith("FAIL") and "clean.qml" in l
+                 and "v22clean" not in l]
+    bad22 = [l for l in out.splitlines()
+             if l.startswith("FAIL") and "v22buggy.qml" in l]
+    clean22 = [l for l in out.splitlines()
+               if l.startswith("FAIL") and "v22clean.qml" in l]
     ok = (len(bad) == 3 and len(clean_bad) == 0
-          and all("has no member" in l for l in bad))
+          and all("has no member" in l for l in bad)
+          and len(bad22) == 2 and len(clean22) == 0
+          and all("non-existent property" in l for l in bad22))
     if ok:
         print("SELFTEST PASS — v21 caught all 3 planted cross-object "
-              "bugs; the clean file was not punished")
+              "bugs; v22 caught caretColor + the inline-comp typo; "
+              "both clean files were not punished")
     else:
         print("SELFTEST FAIL")
         for l in bad + clean_bad:
