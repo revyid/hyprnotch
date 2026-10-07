@@ -22,6 +22,16 @@ Item {
     property bool shown: UiState.activePopup === "notifCenter"
     onShownChanged: if (shown) Notifs.markSeen()
 
+    //  ── r28 UX: clear-all needs a beat ─────────────────────────
+    //  One click used to erase the entire history. Now the first click
+    //  arms the label ("sure?", red, 2.6s window), the second confirms.
+    property bool clearArmed: false
+    Timer {
+        id: clearDisarm
+        interval: 2600
+        onTriggered: ncWindow.clearArmed = false
+    }
+
     Column {
         id: notifColumn
         x: ncWindow.pad
@@ -45,16 +55,33 @@ Item {
             Item { width: parent.width - 130; height: 1 }
 
             Text {
+                id: clearLabel
                 anchors.verticalCenter: parent.verticalCenter
-                text: "clear all"
-                color: Notifs.history.length > 0 ? Theme.accent : Theme.dim
+                text: ncWindow.clearArmed ? "sure? tap again" : "clear all"
+                color: Notifs.history.length === 0 ? Theme.dim
+                    : (ncWindow.clearArmed ? Theme.red : Theme.accent)
                 font.family: Theme.uiFont
                 font.pixelSize: 10
+                font.weight: ncWindow.clearArmed ? Font.DemiBold : Font.Medium
 
                 MouseArea {
+                    id: clearArea
                     anchors.fill: parent
+                    anchors.margins: -6
+                    hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Notifs.clearAll()
+                    onClicked: {
+                        if (Notifs.history.length === 0)
+                            return
+                        if (!ncWindow.clearArmed) {
+                            ncWindow.clearArmed = true
+                            clearDisarm.restart()
+                        } else {
+                            ncWindow.clearArmed = false
+                            clearDisarm.stop()
+                            Notifs.clearAll()
+                        }
+                    }
                 }
             }
         }

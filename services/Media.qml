@@ -60,6 +60,20 @@ Singleton {
     function next()       { if (hasPlayer && player.canGoNext) player.next() }
     function previous()   { if (hasPlayer && player.canGoPrevious) player.previous() }
 
+    //  ── Seek (r28): the media tile's progress bar is now draggable.
+    //  MPRIS players expose canSeek; when they do, writing `position`
+    //  moves playback, and the local ticker re-bases on the new spot
+    //  immediately so the bar never snaps back.
+    readonly property bool canSeek: hasPlayer && player.canSeek === true
+
+    function seek(seconds) {
+        if (!canSeek)
+            return
+        const target = Math.max(0, length > 0 ? Math.min(seconds, length - 1) : seconds)
+        player.position = Math.round(target)
+        livePosition = player.position
+    }
+
     function formatTime(seconds) {
         const s = Math.floor(seconds)
         const m = Math.floor(s / 60), r = s % 60

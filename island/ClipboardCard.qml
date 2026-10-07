@@ -43,6 +43,38 @@ Item {
         return out
     }
 
+    //  ── r28 UX: destructive needs a beat ─────────────────────────
+    //  Wipe-all used to nuke the whole history on one click. Now the
+    //  first click ARMS (button turns red, "sure?" appears), the second
+    //  click within 2.6s wipes, and idling disarms. Same pattern the
+    //  notification center's clear-all uses.
+    property bool wipeArmed: false
+    Timer {
+        id: wipeDisarm
+        interval: 2600
+        onTriggered: clipCard.wipeArmed = false
+    }
+
+    function requestWipe() {
+        if (!wipeArmed) {
+            wipeArmed = true
+            wipeDisarm.restart()
+        } else {
+            wipeArmed = false
+            wipeDisarm.stop()
+            Clipboard.wipe()
+        }
+    }
+
+    //  Recall flash (r28): the clicked row glows for a beat, so a paste
+    //  triggered elsewhere still reads as "this row acted".
+    property string flashIdx: ""
+    Timer {
+        id: flashReset
+        interval: 900
+        onTriggered: clipCard.flashIdx = ""
+    }
+
     Column {
         id: body
         x: 12
@@ -88,26 +120,38 @@ Item {
                 id: wipeBtn
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                width: 26
+                width: wipeArmed ? 58 : 26
                 height: 22
                 radius: 6
-                color: wipeArea.containsMouse
-                    ? Theme.withAlpha(Theme.red, 0.3) : Theme.withAlpha(Theme.ink, 0.08)
+                color: wipeArmed ? Theme.red
+                    : (wipeArea.containsMouse ? Theme.withAlpha(Theme.red, 0.3) : Theme.withAlpha(Theme.ink, 0.08))
 
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: clipCard.wipeArmed
+                    text: "sure?"
+                    color: "#ffffff"
+                    font.family: Theme.uiFont
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                }
 
                 Glyph {
                     anchors.centerIn: parent
                     size: 12
-                    colorVal: Theme.ink
+                    colorVal: wipeArea.containsMouse ? Theme.red : Theme.ink
                     glyph: "\uF1F8"   // trash
+                    visible: !clipCard.wipeArmed
                 }
                 MouseArea {
                     id: wipeArea
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Clipboard.wipe()
+                    onClicked: clipCard.requestWipe()
                 }
             }
         }
@@ -137,6 +181,7 @@ Item {
                 verticalAlignment: TextInput.AlignVCenter
                 text: Clipboard.query
                 color: Theme.ink
+                caretColor: Theme.accent
                 font.family: Theme.uiFont
                 font.pixelSize: 12
                 clip: true
@@ -225,11 +270,14 @@ Item {
                 required property var modelData
                 required property int index
 
+                readonly property bool flashing: clipCard.flashIdx === String(modelData.idx)
+
                 width: list.width
                 height: 35
                 radius: 8
-                color: clipArea.containsMouse
-                    ? Theme.withAlpha(Theme.accent, 0.16) : Theme.withAlpha(Theme.ink, 0.06)
+                color: flashing ? Theme.withAlpha(Theme.accent, 0.45)
+                    : (clipArea.containsMouse
+                        ? Theme.withAlpha(Theme.accent, 0.16) : Theme.withAlpha(Theme.ink, 0.06))
                 scale: clipArea.pressed ? 0.98 : 1
 
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
@@ -294,7 +342,11 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Clipboard.recall(clipRow.modelData.idx)
+                    onClicked: {
+                        clipCard.flashIdx = String(clipRow.modelData.idx)
+                        flashReset.restart()
+                        Clipboard.recall(clipRow.modelData.idx)
+                    }
                 }
             }
         }

@@ -38,6 +38,115 @@ Item {
     property int prefWidth: 560
     implicitHeight: 466
 
+    //  ── Inline calculator (r28) ───────────────────────────────────
+    //  Type any arithmetic expression and the launcher prepends a
+    //  result row — Enter or click copies it. NO eval(): a tiny
+    //  recursive-descent parser over a strict charset (digits, + - * /
+    //  % ^ parens, dot) so an expression can never execute anything —
+    //  it can only do math. Full-consumption + finite checks reject
+    //  garbage; the value is round-tripped through Math.round(1e10)
+    //  to hide float dust (0.1+0.2 → 0.3).
+    function calcEvaluate(src) {
+        const trimmed = String(src).trim()
+        //  internal whitespace means the user is SEARCHING, not doing
+        //  math — "3+4 5" must never become 3+45 = 48.
+        if (/\s/.test(trimmed))
+            return null
+        const s = trimmed
+        if (s.length === 0 || s.length > 60)
+            return null
+        //  charset gate WITHOUT a regex class: "(" inside a character
+        //  class confuses naive bracket scanners (including our own
+        //  validator), and indexOf() is just as strict.
+        const ALLOWED = "0123456789+-*/%^()."
+        for (let c = 0; c < s.length; ++c)
+            if (ALLOWED.indexOf(s[c]) < 0)
+                return null
+        if (s.indexOf("0") < 0 && s.indexOf("1") < 0 && s.indexOf("2") < 0
+                && s.indexOf("3") < 0 && s.indexOf("4") < 0 && s.indexOf("5") < 0
+                && s.indexOf("6") < 0 && s.indexOf("7") < 0 && s.indexOf("8") < 0
+                && s.indexOf("9") < 0)
+            return null
+
+        let pos = 0
+        function peek() { return pos < s.length ? s[pos] : "" }
+
+        function parseExpr() {
+            let v = parseTerm()
+            while (peek() === "+" || peek() === "-") {
+                const op = s[pos++]
+                const r = parseTerm()
+                v = op === "+" ? v + r : v - r
+            }
+            return v
+        }
+        function parseTerm() {
+            let v = parseFactor()
+            while (peek() === "*" || peek() === "/" || peek() === "%") {
+                const op = s[pos++]
+                const r = parseFactor()
+                if (op === "*") v = v * r
+                else if (r === 0) return NaN
+                else v = op === "/" ? v / r : v % r
+            }
+            return v
+        }
+        function parseFactor() {
+            if (peek() === "-") { pos++; return -parseFactor() }
+            if (peek() === "+") { pos++; return parseFactor() }
+            let v = parsePrimary()
+            if (peek() === "^") {
+                pos++
+                v = Math.pow(v, parseFactor())      //  right-assoc: 2^3^2 = 512
+            }
+            return v
+        }
+        function parsePrimary() {
+            if (peek() === "(") {
+                pos++
+                const v = parseExpr()
+                if (peek() !== ")")
+                    return NaN
+                pos++
+                return v
+            }
+            const start = pos
+            while (pos < s.length && ((s[pos] >= "0" && s[pos] <= "9") || s[pos] === "."))
+                pos++
+            if (pos === start)
+                return NaN
+            const num = parseFloat(s.substring(start, pos))
+            return isNaN(num) ? NaN : num
+        }
+
+        try {
+            const v = parseExpr()
+            if (pos !== s.length || !isFinite(v))
+                return null
+            return Math.round(v * 1e10) / 1e10
+        } catch (e) {
+            return null
+        }
+    }
+
+    //  Result copy: the value can only contain [0-9+-*/%^().] — no
+    //  quotes, no letters, no shell metacharacters beyond a leading
+    //  dash that echo/wl-copy treat as data — so single-quoting is a
+    //  complete injection guard.
+    function copyCalc(v) {
+        const t = String(v)
+        Power.run("echo '" + t + "' | wl-copy >/dev/null 2>&1")
+        calcFlash.restart()
+        Notifs.toast("Launcher", "Result copied", "= " + t)
+    }
+
+    property bool calcCopied: false
+    Timer {
+        id: calcFlash
+        interval: 1800
+        onTriggered: launcherCard.calcCopied = false
+    }
+
     //  ── Every island action, palette-ready ────────────────────────
     //  `act` doubles as the Hotkeys action id where one exists, so the
     //  chord column always matches what the keybinds editor shows.
@@ -79,6 +188,16 @@ Item {
 
         const out = []
         const f = launcherCard.filter
+
+        //  Math first (r28): a typed expression becomes a result row on
+        //  top — All and Actions tabs only, never the pure Apps grid.
+        if (f !== "apps" && query.trim().length > 0) {
+            const res = calcEvaluate(query)
+            if (res !== null)
+                out.push({ kind: "calc", icon: Icons.copy, title: "= " + res,
+                           sub: calcCopied ? "copied to clipboard ✓" : "Enter to copy the result",
+                           hint: "calculator", value: res })
+        }
 
         if (f !== "apps") {
             const acts = []
@@ -149,6 +268,11 @@ Item {
         const e = entries[idx]
         if (!e || e.kind === "header")
             return
+        if (e.kind === "calc") {
+            calcCopied = true
+            copyCalc(e.value)
+            return
+        }
         if (e.kind === "action")
             runAction(e)
         else
@@ -303,6 +427,7 @@ Item {
                 verticalAlignment: TextInput.AlignVCenter
                 text: launcherCard.query
                 color: Theme.ink
+                caretColor: Theme.accent
                 font.family: Theme.uiFont
                 font.pixelSize: 13
                 clip: true
@@ -351,7 +476,7 @@ Item {
                 Text {
                     anchors.fill: parent
                     visible: searchInput.text.length === 0
-                    text: "Search actions and apps…  (Up/Down select · Enter run · Esc close)"
+                    text: "Search actions and apps, or type math…  (Up/Down select · Enter run · Esc close)"
                     color: Theme.dim
                     font.family: searchInput.font.family
                     font.pixelSize: 13

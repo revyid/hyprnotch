@@ -100,7 +100,12 @@ Item {
             Rectangle {
                 width: 24; height: 24; radius: 8
                 color: pvArea.containsMouse ? Theme.surfaceHi : "transparent"
+                scale: pvArea.pressed ? 0.88 : 1
                 anchors.verticalCenter: parent.verticalCenter
+
+                Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
                 Glyph { anchors.centerIn: parent; size: 11; colorVal: Theme.muted; glyph: Icons.chevronLeft }
                 MouseArea {
                     id: pvArea
@@ -111,21 +116,41 @@ Item {
                 }
             }
 
+            //  r28: the title doubles as TODAY — browsing other months
+            //  and clicking it snaps back to the current month, macOS
+            //  Calendar style. Hint appears only when you are away.
             Text {
+                id: monthTitle
                 width: parent.width - 48
                 anchors.verticalCenter: parent.verticalCenter
-                text: calWindow.monthName()
-                color: Theme.ink
+                readonly property bool away: viewDate.getMonth() !== new Date().getMonth()
+                    || viewDate.getFullYear() !== new Date().getFullYear()
+                text: calWindow.monthName() + (away ? "  ·  today" : "")
+                color: monthArea.containsMouse && away ? Theme.accent : Theme.ink
                 font.family: Theme.uiFont
                 font.pixelSize: 12
                 font.weight: Font.DemiBold
                 horizontalAlignment: Text.AlignHCenter
+                Behavior on color { ColorAnimation { duration: Theme.animFast } }
+
+                MouseArea {
+                    id: monthArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: if (monthTitle.away) calWindow.viewDate = new Date()
+                }
             }
 
             Rectangle {
                 width: 24; height: 24; radius: 8
                 color: nxArea.containsMouse ? Theme.surfaceHi : "transparent"
+                scale: nxArea.pressed ? 0.88 : 1
                 anchors.verticalCenter: parent.verticalCenter
+
+                Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
                 Glyph { anchors.centerIn: parent; size: 11; colorVal: Theme.muted; glyph: Icons.chevronRight }
                 MouseArea {
                     id: nxArea

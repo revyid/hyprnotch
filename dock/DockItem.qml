@@ -150,10 +150,21 @@ Item {
       : root.position === "left"
         ? Item.Left
         : root.position === "right" ? Item.Right : Item.Bottom
-    scale: root.iconScale
+    //  r28: macOS launch bounce — a separate multiplier so the
+    //  magnification binding above is never overwritten by the
+    //  animation (animating a bound property would break it).
+    property real bounceFx: 1
+    scale: root.iconScale * bounceFx
 
     Behavior on scale {
       NumberAnimation { duration: 90; easing.type: Easing.OutCubic }
+    }
+
+    SequentialAnimation {
+      id: launchBounce
+      NumberAnimation { target: iconContainer; property: "bounceFx"; to: 0.78; duration: 140; easing.type: Easing.InQuad }
+      NumberAnimation { target: iconContainer; property: "bounceFx"; to: 1.18; duration: 220; easing.type: Easing.OutCubic }
+      NumberAnimation { target: iconContainer; property: "bounceFx"; to: 1.0; duration: 220; easing.type: Easing.OutBack; easing.overshoot: 0.7 }
     }
 
     Rectangle {
@@ -229,7 +240,12 @@ Item {
 
   TapHandler {
     acceptedButtons: Qt.LeftButton
-    onTapped: root.activateOrLaunch()
+    onTapped: {
+      root.activateOrLaunch()
+      //  Not running yet → the icon bounces while the app starts.
+      if (!root.runningToplevel)
+        launchBounce.restart()
+    }
   }
 
   TapHandler {

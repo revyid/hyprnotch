@@ -18,3 +18,4 @@ singleton Agent 1.0 Agent.qml
 singleton Hotkeys 1.0 Hotkeys.qml
 singleton Clipboard 1.0 Clipboard.qml
 singleton Cava 1.0 Cava.qml
+singleton FocusTimer 1.0 FocusTimer.qml

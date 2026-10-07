@@ -77,6 +77,10 @@ Singleton {
     readonly property string cloud:            "\uF0C2"
     readonly property string spinner:          "\uF110"
     readonly property string refresh:          "\uF021"
+    //  r28: focus timer + launcher calculator
+    readonly property string hourglass:        "\uF252"
+    readonly property string copy:             "\uF0C5"
+    readonly property string stopwatch:        "\uF2E2"
 
     //  Bluetooth device categories (FontAwesome range)
     readonly property string headphones:       "\uF025"

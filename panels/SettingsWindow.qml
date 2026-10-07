@@ -862,7 +862,8 @@ Window {
                 toggles: "Connection toggles", system: "System (About · Monitor · Wallpaper)",
                 sliders: "Sliders (brightness · volume · mic)",
                 media: "Media player", stats: "System stats", quickActions: "Quick actions",
-                weather: "Weather", plugins: "Plugins row", tasks: "Tasks"
+                weather: "Weather", plugins: "Plugins row", tasks: "Tasks",
+                focus: "Focus Timer"
             })
 
             Repeater {
@@ -934,7 +935,8 @@ Window {
             toggles: "Connection toggles", system: "System (About · Monitor · Wallpaper)",
             sliders: "Sliders (brightness · volume · mic)",
             media: "Media player", stats: "System stats", quickActions: "Quick actions",
-            weather: "Weather", plugins: "Plugins row", tasks: "Tasks"
+            weather: "Weather", plugins: "Plugins row", tasks: "Tasks",
+            focus: "Focus Timer"
         }
         return map[key] || key
     }

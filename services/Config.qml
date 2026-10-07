@@ -43,14 +43,19 @@ Singleton {
             //  when installed, smooth synthetic fallback otherwise).
             cava: true
         },
+        //  r28: focus timer — service state lives in FocusTimer; config
+        //  only gates the section and the pill chip.
+        focus: {
+            enabled: true
+        },
         controlCenter: {
             enabled: true,
             width: 360,
             tileColumns: 2,
-            sections: ["toggles", "system", "weather", "sliders", "media", "quickActions", "plugins", "tasks"],
+            sections: ["toggles", "system", "weather", "sliders", "media", "focus", "quickActions", "plugins", "tasks"],
             sectionEnabled: {
                 toggles: true, system: true, weather: true, sliders: true, media: true,
-                quickActions: true, plugins: true, tasks: true
+                focus: true, quickActions: true, plugins: true, tasks: true
             }
         },
         quickActions: [
@@ -265,7 +270,24 @@ Singleton {
         //      ganti blur frost") — dock.liquid/glassOpacity are dropped
         //      and replaced by dock.blur; the clipboard feature section
         //      gains its enabled flag.
+        //  v7: the Focus Timer joined the control center (r28) — inject
+        //      the new "focus" section after "media" for configs saved
+        //      before it existed, and make sure the focus gate object is
+        //      present.
         const ver = (disk && disk.general && disk.general.cfgVersion) || 1
+        if (ver < 7) {
+            if (data.controlCenter.sections.indexOf("focus") < 0) {
+                const atMedia = data.controlCenter.sections.indexOf("media")
+                if (atMedia >= 0)
+                    data.controlCenter.sections.splice(atMedia + 1, 0, "focus")
+                else
+                    data.controlCenter.sections.push("focus")
+            }
+            if (!data.focus || typeof data.focus !== "object")
+                data.focus = JSON.parse(JSON.stringify(defaults.focus))
+            if (typeof data.focus.enabled !== "boolean")
+                data.focus.enabled = true
+        }
         if (ver < 2) {
             data.dock.enabled = true
             data.island.peekEnabled = true
@@ -313,7 +335,7 @@ Singleton {
             if (typeof data.clipboard.enabled !== "boolean")
                 data.clipboard.enabled = true
         }
-        data.general.cfgVersion = 6
+        data.general.cfgVersion = 7
         loaded = true
         Theme.accent = data.general.accent || "#0a84ff"
     }

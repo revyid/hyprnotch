@@ -139,6 +139,22 @@ is not.
   the sink monitor is unavailable); otherwise a smooth synthetic
   motion — flat when paused either way. Toggle: Settings → Island →
   Media, or the `island.cava` key.
+- **Focus timer + the r28 polish round** — a pomodoro-grade **Focus
+  Timer** now lives in the notch: preset chips (5/15/25/50 min), big
+  countdown with a progress strip, start/pause/reset, a completion
+  toast, and a live `⏳ m:ss` chip in the pill while the notch is
+  closed (gate: Quick Toggles → Focus Timer). The **launcher gained an
+  inline calculator** — type `2+2*3`, `10/4`, `2^10`, `0.1+0.2`, and a
+  result row appears on top; Enter copies it (strict charset parser,
+  never eval). The **media progress bar is seekable** (click/drag, MPRIS
+  `canSeek` players). The pill grew **state chips**: pulsing red
+  recording dot (click = stop), DND moon (click = unmute), focus
+  countdown; the battery icon **breathes at ≤15%** and toasts at 20/10/5
+  once per discharge cycle. The dock **bounces on launch**. Destructive
+  actions (clipboard wipe, clear-all notifications) now use a
+  **two-tap confirm**, clipboard rows flash on recall, calendar titles
+  jump back to today, and every destructive/whole-feature switch reads
+  the same config keys.
 - **Notifications (HyprNotch IS the daemon)** — Quickshell's
   NotificationServer claims org.freedesktop.Notifications, so banners
   render INSIDE the island window under the pill: app icon, summary, body,

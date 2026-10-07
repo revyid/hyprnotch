@@ -42,6 +42,14 @@ Singleton {
     property real batteryWatts: 0
     property string uptime: "--"
 
+    //  ── low-battery alerts (r28) ──────────────────────────────────
+    //  One toast per threshold per discharge cycle; flags reset the
+    //  moment the charger comes back. Off by default-proof: the toast
+    //  goes through Notifs, which respects DND — silent hours stay
+    //  silent.
+    property var lowFlags: ({})
+    readonly property var lowThresholds: [20, 10, 5]
+
     //  ── device identity (About card) ──────────────────────────────
     property string hostName: ""
     property string osName: ""
@@ -236,7 +244,12 @@ done`
         case "BAT":
             batteryPresent = true
             batteryPct = Math.max(0, Math.min(100, parseInt(parts[1]) || 0))
+            const wasCharging = batteryCharging
             batteryCharging = (parts[2] === "Charging" || parts[2] === "Full")
+            if (batteryCharging && !wasCharging)
+                lowFlags = ({})            //  fresh discharge cycle
+            if (!batteryCharging)
+                lowBatteryCheck()
             break
         case "WATT":
             batteryWatts = parseFloat(parts[1]) || 0
@@ -249,6 +262,22 @@ done`
 
     function clamp(v) {
         return Math.max(0, Math.min(100, isNaN(v) ? 0 : v))
+    }
+
+    function lowBatteryCheck() {
+        if (!batteryPresent)
+            return
+        for (let i = 0; i < lowThresholds.length; ++i) {
+            const t = lowThresholds[i]
+            if (batteryPct <= t && lowFlags[t] !== true) {
+                const copy = {}
+                for (const k in lowFlags) copy[k] = lowFlags[k]
+                copy[t] = true
+                lowFlags = copy
+                Notifs.toast("Battery", batteryPct + "% remaining",
+                    t <= 10 ? "plug in — running on fumes" : "find a charger soon")
+            }
+        }
     }
 
     function formatGb(v) {

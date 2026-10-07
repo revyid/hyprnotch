@@ -545,6 +545,97 @@ PanelWindow {
                     }
                 }
 
+                //  ── Right: recording tell (r28) — the pill knows when
+                //  the screen is rolling even with the notch closed.
+                //  Pulsing red dot; click stops the recording.
+                MouseArea {
+                    id: recZone
+                    visible: Power.recording
+                    anchors.verticalCenter: parent.verticalCenter
+                    implicitWidth: 20
+                    implicitHeight: islandWindow.cfg.pillHeight
+                    cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+
+                    onClicked: Power.record()   //  recording → stops it
+
+                    SequentialAnimation on opacity {
+                        running: Power.recording && !recZone.pressed
+                        loops: Animation.Infinite
+                        NumberAnimation { to: 0.35; duration: 620; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 1.0; duration: 620; easing.type: Easing.InOutSine }
+                    }
+
+                    Glyph {
+                        anchors.centerIn: parent
+                        size: 11
+                        colorVal: Theme.red
+                        glyph: Icons.video
+                    }
+                }
+
+                //  ── Right: Focus timer chip (r28) — hourglass + the
+                //  live countdown while a session is armed or running.
+                MouseArea {
+                    id: focusZone
+                    visible: Config.get("focus.enabled", true) && FocusTimer.active
+                    anchors.verticalCenter: parent.verticalCenter
+                    implicitWidth: focusRow.implicitWidth + 4
+                    implicitHeight: islandWindow.cfg.pillHeight
+                    cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+                    scale: focusZone.pressed ? 0.94 : 1
+
+                    Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
+                    onClicked: UiState.openPopup("controlCenter")
+
+                    Row {
+                        id: focusRow
+                        anchors.centerIn: parent
+                        spacing: 4
+
+                        Glyph {
+                            anchors.verticalCenter: parent.verticalCenter
+                            size: 11
+                            colorVal: Theme.purple
+                            glyph: Icons.hourglass
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: FocusTimer.label()
+                            color: Theme.ink
+                            font.family: Theme.uiFont
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                }
+
+                //  ── Right: Do Not Disturb moon (r28) — silence state
+                //  visible at a glance; click flips it straight back.
+                MouseArea {
+                    id: dndZone
+                    visible: Notifs.dnd
+                    anchors.verticalCenter: parent.verticalCenter
+                    implicitWidth: 20
+                    implicitHeight: islandWindow.cfg.pillHeight
+                    cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+                    scale: dndZone.pressed ? 0.88 : 1
+
+                    Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
+                    onClicked: Notifs.toggleDnd()
+
+                    Glyph {
+                        anchors.centerIn: parent
+                        size: 12
+                        colorVal: Theme.yellow
+                        glyph: Icons.moon
+                    }
+                }
+
                 //  ── Right: indicators → control center ───────────
                 MouseArea {
                     id: statusZone
@@ -631,11 +722,22 @@ PanelWindow {
                                 spacing: 4
 
                                 Glyph {
+                                    id: batteryGlyph
                                     anchors.verticalCenter: parent.verticalCenter
                                     size: 14
                                     colorVal: SysMon.batteryCharging ? Theme.green
                                         : (SysMon.batteryPct <= 15 ? Theme.red : Theme.ink)
                                     glyph: Icons.batteryIcon(SysMon.batteryPct, SysMon.batteryCharging)
+
+                                    //  Critical-battery pulse (r28): the icon
+                                    //  breathes while discharging at ≤15%.
+                                    SequentialAnimation on scale {
+                                        running: SysMon.batteryPresent && !SysMon.batteryCharging
+                                            && SysMon.batteryPct <= 15
+                                        loops: Animation.Infinite
+                                        NumberAnimation { to: 1.22; duration: 640; easing.type: Easing.InOutSine }
+                                        NumberAnimation { to: 1.0; duration: 640; easing.type: Easing.InOutSine }
+                                    }
                                 }
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter

@@ -96,6 +96,7 @@ Item {
                         Behavior on anchors.leftMargin { NumberAnimation { duration: Theme.animFast } }
                         text: ccWindow.pane === "wifi" ? "Wi-Fi"
                             : ccWindow.pane === "bluetooth" ? "Bluetooth"
+                            : ccWindow.pane === "features" ? "Quick Toggles"
                             : "Control Center"
                         color: Theme.ink
                         font.family: Theme.uiFont
@@ -150,11 +151,17 @@ Item {
                 }
 
                 //  ── The pane: slides/fades in on every switch ──────
+                //  r28 FIX: "features" was MISSING from this chain since
+                //  r24 — featuresComp existed but never loaded, so the
+                //  Quick Toggles keybind, the launcher action and the
+                //  IPC alias all opened the MAIN pane instead. This
+                //  branch is why Super+A finally shows the switches.
                 Loader {
                     id: paneLoader
                     width: parent.width
                     sourceComponent: ccWindow.pane === "wifi" ? wifiComp
                         : ccWindow.pane === "bluetooth" ? btComp
+                        : ccWindow.pane === "features" ? featuresComp
                         : mainComp
 
                     onSourceComponentChanged: {
@@ -200,9 +207,12 @@ Item {
                 model: ccWindow.cfg.sections
 
                 Loader {
+                    id: secLoader
                     required property string modelData
+                    required property int index
                     readonly property bool isOn: ccWindow.cfg.sectionEnabled[modelData] !== false
-                    readonly property bool hasData: modelData !== "weather" || Weather.ready
+                    readonly property bool hasData: (modelData !== "weather" || Weather.ready)
+                        && (modelData !== "focus" || Config.get("focus.enabled", true))
                     width: parent ? parent.width : 0
                     visible: isOn && hasData
                     sourceComponent: !isOn || !hasData ? null
@@ -211,10 +221,29 @@ Item {
                         : modelData === "weather" ? weatherComp
                         : modelData === "sliders" ? slidersComp
                         : modelData === "media" ? mediaComp
+                        : modelData === "focus" ? focusComp
                         : modelData === "quickActions" ? actionsComp
                         : modelData === "plugins" ? pluginsSectionComp
                         : modelData === "tasks" ? tasksComp
                         : null
+
+                    //  ── r28 staggered entrance: each section fades and
+                    //  lifts in with a per-index beat, so an open reads
+                    //  as one motion instead of a wall that pops. The
+                    //  beat is capped so deep stacks never feel slow.
+                    opacity: 0
+                    transform: Translate { id: secEnter; y: 10 }
+
+                    Component.onCompleted: secEnterAnim.restart()
+
+                    SequentialAnimation {
+                        id: secEnterAnim
+                        PauseAnimation { duration: 36 * Math.min(8, secLoader.index) }
+                        ParallelAnimation {
+                            NumberAnimation { target: secLoader; property: "opacity"; from: 0; to: 1; duration: 240; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: secEnter; property: "y"; from: 10; to: 0; duration: 300; easing.type: Easing.OutCubic }
+                        }
+                    }
                 }
             }
         }
@@ -223,13 +252,15 @@ Item {
     //  ── System: the discoverable doors to the machine pages ───────
     //  The island hosts an About This Device card, a live monitor and a
     //  wallpaper picker — but a popup nobody can find is dead weight.
-    //  Three plain rows, macOS System Settings style, one tap each.
+    //  Plain rows, macOS System Settings style, one tap each. r28: the
+    //  Quick Toggles door is back (it silently vanished from this list)
+    //  and routes into the features pane like the keybind does.
     Component {
         id: systemSectionComp
 
         Rectangle {
             width: parent ? parent.width : 0
-            height: 3 * 38 + 12
+            height: 4 * 38 + 12
             radius: Theme.radiusTile
             color: Theme.surfaceHi
 
@@ -245,7 +276,9 @@ Item {
                         { key: "stats",     glyph: Icons.chart,  label: "System Monitor",
                             sub: "CPU " + SysMon.cpuPct + "% · RAM " + SysMon.memPct + "%" },
                         { key: "wallpaper", glyph: Icons.image,  label: "Wallpaper",
-                            sub: Wallpaper.available ? (Wallpaper.current.length > 0 ? Wallpaper.fileName(Wallpaper.current) : "Pick an image") : Wallpaper.tool + " not found" }
+                            sub: Wallpaper.available ? (Wallpaper.current.length > 0 ? Wallpaper.fileName(Wallpaper.current) : "Pick an image") : Wallpaper.tool + " not found" },
+                        { key: "toggles",   glyph: Icons.sliders, label: "Quick Toggles",
+                            sub: "switch whole features on or off" }
                     ]
 
                     delegate: Rectangle {
@@ -310,7 +343,14 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: UiState.openPopup(sysRow.modelData.key)
+                            onClicked: {
+                                if (sysRow.modelData.key === "toggles") {
+                                    UiState.controlCenterPane = "features"
+                                    ccWindow.pane = "features"
+                                } else {
+                                    UiState.openPopup(sysRow.modelData.key)
+                                }
+                            }
                         }
                     }
                 }
@@ -794,6 +834,7 @@ Item {
                                     font.family: Theme.uiFont
                                     font.pixelSize: 11
                                     color: Theme.ink
+                                    caretColor: Theme.accent
                                     placeholderTextColor: Theme.dim
                                     focus: Net.pskTarget === netEntry.modelData
                                     background: Rectangle {
@@ -1164,7 +1205,7 @@ Item {
             id: mediaTile
             width: parent ? parent.width : 0
             readonly property bool showCava: Media.playing && Cava.enabled
-            height: visible && Media.hasPlayer ? (showCava ? 120 : 92) : 0
+            height: visible && Media.hasPlayer ? (showCava ? 128 : 108) : 0
             radius: Theme.radiusTile
             color: Theme.surfaceHi
             visible: Media.hasPlayer
@@ -1267,26 +1308,84 @@ Item {
                     gap: 5
                 }
 
-                //  ── Live progress (ticks every second while playing) ─
+                //  ── Live + SEEKABLE progress (r28): the bar was a
+                //  read-only strip; now players that support MPRIS seek
+                //  take click/drag on the track (14px hit target — the
+                //  3px bar was impossible to grab). While scrubbing the
+                //  fill follows the pointer and the linear tick easing
+                //  steps aside so the head never lags the hand.
                 Column {
                     width: parent.width
                     spacing: 2
 
-                    Rectangle {
+                    Item {
+                        id: seekTrack
                         width: parent.width
-                        height: 3
-                        radius: 1.5
-                        color: Theme.track
+                        height: 14
+
+                        property bool scrubbing: false
+                        property real scrubFrac: 0
+                        readonly property real frac: scrubbing ? scrubFrac : Media.progress
 
                         Rectangle {
-                            anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width * Media.progress
-                            height: parent.height
-                            radius: 1.5
-                            color: Theme.accent
+                            width: parent.width
+                            height: 4
+                            radius: 2
+                            color: Theme.track
+                        }
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.max(4, seekTrack.frac * seekTrack.width)
+                            height: 4
+                            radius: 2
+                            color: Media.canSeek ? Theme.accent : Theme.withAlpha(Theme.accent, 0.5)
 
-                            Behavior on width { NumberAnimation { duration: 900; easing.type: Easing.Linear } }
+                            Behavior on width {
+                                enabled: !seekTrack.scrubbing
+                                NumberAnimation { duration: 900; easing.type: Easing.Linear }
+                            }
+                        }
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: Math.max(0, Math.min(parent.width - width,
+                                    seekTrack.frac * parent.width - width / 2))
+                            width: 9
+                            height: 9
+                            radius: 4.5
+                            color: "#ffffff"
+                            visible: Media.canSeek
+                            opacity: seekTrack.scrubbing || seekArea.containsMouse ? 1 : 0
+
+                            Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                            scale: seekTrack.scrubbing ? 1.25 : 1
+                            Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+                        }
+
+                        MouseArea {
+                            id: seekArea
+                            anchors.fill: parent
+                            enabled: Media.canSeek
+                            cursorShape: Qt.PointingHandCursor
+                            hoverEnabled: true
+
+                            function fracAt(mx) {
+                                return Math.max(0, Math.min(1, mx / seekTrack.width))
+                            }
+
+                            onPressed: (m) => {
+                                seekTrack.scrubbing = true
+                                seekTrack.scrubFrac = fracAt(m.x)
+                            }
+                            onPositionChanged: (m) => {
+                                if (pressed)
+                                    seekTrack.scrubFrac = fracAt(m.x)
+                            }
+                            onReleased: (m) => {
+                                Media.seek(fracAt(m.x) * Media.length)
+                                seekTrack.scrubbing = false
+                            }
+                            onCanceled: seekTrack.scrubbing = false
                         }
                     }
 
@@ -1296,8 +1395,9 @@ Item {
 
                         Text {
                             anchors.left: parent.left
-                            text: Media.formatTime(Media.livePosition)
-                            color: Theme.muted
+                            text: Media.formatTime(seekTrack.scrubbing
+                                ? seekTrack.scrubFrac * Media.length : Media.livePosition)
+                            color: seekTrack.scrubbing ? Theme.ink : Theme.muted
                             font.family: Theme.uiFont
                             font.pixelSize: 9
                         }
@@ -1518,6 +1618,7 @@ Item {
                     font.family: Theme.uiFont
                     font.pixelSize: 11
                     color: Theme.ink
+                    caretColor: Theme.accent
                     placeholderTextColor: Theme.dim
                     background: Rectangle {
                         radius: Theme.radiusSmall
@@ -1550,6 +1651,227 @@ Item {
                             Tasks.add(taskInput.text)
                             taskInput.text = ""
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    //  ══════════════════════════════════════════════════════════════
+    //  FOCUS TIMER (r28) — pomodoro-grade countdown, state lives in
+    //  services/FocusTimer.qml. Preset chips start a session right
+    //  away, the big button starts / pauses, reset returns to the full
+    //  preset. The pill chip (IslandWindow) mirrors the countdown while
+    //  the notch is closed, and the service raises a toast on finish.
+    //  ══════════════════════════════════════════════════════════════
+
+    Component {
+        id: focusComp
+
+        Rectangle {
+            id: focusTile
+            width: parent ? parent.width : 0
+            height: focusCol.implicitHeight + 20
+            radius: Theme.radiusTile
+            color: Theme.surfaceHi
+
+            Column {
+                id: focusCol
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 8
+
+                //  header: label + live state
+                Item {
+                    width: parent.width
+                    height: 16
+
+                    Row {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 7
+                        Glyph {
+                            anchors.verticalCenter: parent.verticalCenter
+                            size: 12
+                            colorVal: Theme.purple
+                            glyph: Icons.hourglass
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Focus"
+                            color: Theme.ink
+                            font.family: Theme.uiFont
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                        }
+                    }
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: FocusTimer.running ? ("running · " + FocusTimer.completions + " done")
+                            : (FocusTimer.remaining < FocusTimer.totalSeconds ? "paused" : "ready")
+                        color: FocusTimer.running ? Theme.green : Theme.muted
+                        font.family: Theme.uiFont
+                        font.pixelSize: 9
+                    }
+                }
+
+                //  dial + transport, progress strip underneath
+                Item {
+                    width: parent.width
+                    height: 40
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.bottom: parent.bottom
+                        width: parent.width
+                        height: 3
+                        radius: 1.5
+                        color: Theme.track
+                    }
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.bottom: parent.bottom
+                        width: Math.max(3, focusTile.width * FocusTimer.progress - 20)
+                        height: 3
+                        radius: 1.5
+                        color: Theme.purple
+
+                        Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.Linear } }
+                    }
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.topMargin: 2
+                        text: FocusTimer.label()
+                        color: Theme.ink
+                        font.family: Theme.uiFont
+                        font.pixelSize: 26
+                        font.weight: Font.DemiBold
+                    }
+
+                    Row {
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        spacing: 8
+
+                        //  start / pause — the big transport button
+                        Rectangle {
+                            width: 64
+                            height: 30
+                            radius: 15
+                            color: FocusTimer.running ? Theme.withAlpha(Theme.yellow, 0.18) : Theme.withAlpha(Theme.purple, 0.22)
+                            scale: fPlayArea.pressed ? 0.93 : 1
+
+                            Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                            Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 5
+                                Glyph {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    size: 10
+                                    colorVal: FocusTimer.running ? Theme.yellow : Theme.purple
+                                    glyph: FocusTimer.running ? Icons.pause : Icons.play
+                                }
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: FocusTimer.running ? "Pause"
+                                        : (FocusTimer.remaining < FocusTimer.totalSeconds ? "Resume" : "Start")
+                                    color: FocusTimer.running ? Theme.yellow : Theme.purple
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: 10
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                            MouseArea {
+                                id: fPlayArea
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: FocusTimer.toggle()
+                            }
+                        }
+
+                        //  reset
+                        Rectangle {
+                            width: 30
+                            height: 30
+                            radius: 15
+                            color: fResetArea.containsMouse ? Theme.track : Theme.withAlpha(Theme.ink, 0.06)
+                            scale: fResetArea.pressed ? 0.88 : 1
+
+                            Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                            Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
+                            Glyph {
+                                anchors.centerIn: parent
+                                size: 11
+                                colorVal: Theme.muted
+                                glyph: Icons.refresh
+                            }
+                            MouseArea {
+                                id: fResetArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: FocusTimer.reset()
+                            }
+                        }
+                    }
+                }
+
+                //  preset chips — each starts a session right away; the
+                //  service refuses to re-arm mid-run, so a stray tap can
+                //  never shorten a live countdown.
+                Row {
+                    width: parent.width
+                    height: 22
+                    spacing: 6
+
+                    Repeater {
+                        model: [5, 15, 25, 50]
+
+                        Rectangle {
+                            id: presetChip
+                            required property var modelData
+                            readonly property bool sel: !FocusTimer.running
+                                && FocusTimer.totalSeconds === modelData * 60
+                            width: 44
+                            height: 22
+                            radius: 11
+                            color: sel ? Theme.withAlpha(Theme.purple, 0.3) : Theme.withAlpha(Theme.ink, 0.07)
+                            scale: presetArea.pressed ? 0.9 : 1
+
+                            Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                            Behavior on scale { NumberAnimation { duration: Theme.animPress; easing.type: Easing.OutCubic } }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: presetChip.modelData + "m"
+                                color: presetChip.sel ? Theme.ink : Theme.muted
+                                font.family: Theme.uiFont
+                                font.pixelSize: 10
+                                font.weight: presetChip.sel ? Font.DemiBold : Font.Medium
+                            }
+                            MouseArea {
+                                id: presetArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: FocusTimer.start(presetChip.modelData)
+                            }
+                        }
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "tap a preset to start now"
+                        color: Theme.dim
+                        font.family: Theme.uiFont
+                        font.pixelSize: 9
                     }
                 }
             }
@@ -1594,6 +1916,7 @@ Item {
                     { key: "dock.enabled",           glyph: Icons.desktop,   label: "Dock" },
                     { key: "hud.enabled",            glyph: Icons.volumeHigh,label: "Volume / Brightness HUD" },
                     { key: "island.peekEnabled",     glyph: Icons.mouseIcon, label: "Hover Peek" },
+                    { key: "focus.enabled",          glyph: Icons.hourglass, label: "Focus Timer" },
                     { key: "tasks.enabled",          glyph: Icons.tasks,     label: "Tasks" }
                 ]
 
